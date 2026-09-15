@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local AI Workbench · 原生控制台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AI</div>
+          <div>
+            <strong>LOCAL<br />WORKBENCH</strong>
+            <span>运行时控制台</span>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="主导航">
+          <button class="nav-item active"><span class="nav-glyph">◈</span>总览 <span class="nav-count">01</span></button>
+          <button class="nav-item"><span class="nav-glyph">▦</span>模型与任务</button>
+          <button class="nav-item"><span class="nav-glyph">◌</span>GPU 集群</button>
+          <button class="nav-item"><span class="nav-glyph">⌁</span>事件流</button>
+          <button class="nav-item"><span class="nav-glyph">◫</span>系统资源</button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="connection-dot"><span></span>本机连接正常</div>
+          <div class="host-line">本机 · 127.0.0.1</div>
+          <div class="version">v0.9.4 · DEBUG BUILD</div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="crumbs"><span>工作台</span><i>/</i><strong>实时总览</strong></div>
+          <div class="top-actions">
+            <label class="skin-control" title="切换界面皮肤"><span>皮肤</span><select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option></select></label>
+            <label class="live-toggle" title="切换实时采样">
+              <input id="liveToggle" type="checkbox" checked />
+              <span class="toggle-track"><span></span></span>
+              <b>实时采样</b>
+            </label>
+            <label class="interval-control" title="调整所有数据的刷新间隔">
+              <span>刷新</span>
+              <input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2" />
+              <output id="intervalValue">1.2s</output>
+            </label>
+            <label class="backend-control" title="切换推理后端">
+              <span>后端</span>
+              <select id="backendSelect" aria-label="切换推理后端">
+                <option value="auto">自动</option>
+              </select>
+            </label>
+            <button class="icon-button" id="refreshBtn" title="立即刷新">↻</button>
+            <button class="avatar" title="本地配置">F</button>
+          </div>
+        </header>
+
+        <div class="section-heading daily-heading"><div><span class="section-index">01</span><h2>今日累计</h2><span class="section-note" id="dailyRequests">等待 LM Studio 日志</span></div></div>
+        <section class="daily-grid" aria-label="今日累计 token"><article class="daily-card"><span>今日输入量</span><strong id="dailyInput">—</strong><small>PROMPT TOKENS</small></article><article class="daily-card"><span>今日输出量</span><strong id="dailyOutput">—</strong><small>GENERATED TOKENS</small></article><article class="daily-card total"><span>今日总量</span><strong id="dailyTotal">—</strong><small>INPUT + OUTPUT</small></article></section>
+
+        <section class="model-strip">
+          <div class="model-ident">
+            <span class="status-dot"></span>
+            <div>
+              <div class="eyebrow">当前推理实例</div>
+              <h1 id="modelName">【未加载模型】</h1>
+            </div>
+            <span class="status-chip" id="modelStatus">未加载模型</span>
+          </div>
+          <div class="model-meta">
+              <span><b>后端</b> <span id="backendName">未连接</span></span>
+            <span><b>架构</b> <strong id="modelArch">—</strong></span>
+            <span><b>量化</b> <strong id="modelQuant">—</strong></span>
+            <span><b>上下文</b> <strong id="modelContext">—</strong></span>
+            <span><b>运行配置</b> <strong id="modelRuntime">—</strong></span>
+          </div>
+          <button class="outline-button" id="pauseBtn"><span>Ⅱ</span><em>暂停采样</em></button>
+        </section>
+
+        <section class="metrics-grid" aria-label="关键指标">
+          <article class="metric-card accent-cyan">
+            <div class="metric-head"><span>生成速度</span><small>OUTPUT</small></div>
+            <div class="metric-value"><strong id="genSpeed" class="unavailable">【未加载模型】</strong><span id="genUnit"></span></div>
+            <div class="metric-foot"><span class="trend up" id="genTrend"></span><span id="genWindow">—</span><span class="metric-average">平均 <b id="genAverage">—</b> tok/s</span></div>
+            <div class="sparkline" id="genSpark"></div>
+          </article>
+          <article class="metric-card accent-violet">
+            <div class="metric-head"><span>预填充速度</span><small>PROMPT EVAL</small></div>
+            <div class="metric-value"><strong id="promptSpeed" class="unavailable">【未加载模型】</strong><span id="promptUnit"></span></div>
+            <div class="metric-foot"><span class="trend up" id="promptTrend"></span><span id="promptWindow">—</span><span class="metric-average">平均 <b id="promptAverage">—</b> tok/s</span></div>
+            <div class="sparkline" id="promptSpark"></div>
+          </article>
+          <article class="metric-card accent-amber">
+            <div class="metric-head"><span>上下文占用</span><small>CONTEXT WINDOW</small></div>
+            <div class="metric-value"><strong id="contextUsed" class="unavailable">【未加载模型】</strong><span id="contextTotal"></span></div>
+            <div class="meter compact"><i id="contextBar" style="width: 0%"></i></div>
+            <div class="metric-foot"><span id="contextFoot">【未加载模型】</span><span id="contextRemaining">—</span></div>
+          </article>
+          <article class="metric-card accent-pink">
+            <div class="metric-head"><span>总功耗</span><small>POWER DRAW</small></div>
+            <div class="metric-value"><strong id="totalPower">—</strong><span id="powerUnit">W</span></div>
+            <div class="metric-foot"><span class="trend warm" id="powerPeak">—</span><span id="powerSummary">nvidia-smi 全卡合计</span></div>
+            <div class="power-line"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          </article>
+        </section>
+
+        <div class="section-heading"><div><span class="section-index">02</span><h2>GPU 设备</h2><span class="section-note">按卡聚合 · 每 1.2s 更新</span></div><div class="cluster-status"><span></span>2 / 2 ONLINE</div></div>
+        <section class="gpu-grid" id="gpuGrid"></section>
+
+        <div class="section-heading task-heading"><div><span class="section-index">03</span><h2>运行任务</h2><span class="section-note">推理队列与吞吐</span></div><button class="text-button" id="clearEvents">清空事件 <span>→</span></button></div>
+        <section class="lower-grid">
+          <article class="task-panel">
+            <div class="task-top"><div class="task-status"><span class="pulse" id="taskPulse"></span><b id="taskStatus">【未加载模型】</b></div><span class="task-id" id="taskId">—</span></div>
+            <div class="task-title unavailable" id="taskTitle">【未加载模型】</div>
+            <div class="task-progress-row"><span id="taskProgress">【未加载模型】</span><b id="taskPct">—</b></div>
+            <div class="meter task-meter"><i id="taskBar" style="width: 0%"></i></div>
+            <div class="task-meta"><span id="taskStarted">—</span><span id="taskEta">—</span><span class="task-model" id="taskModel">—</span></div>
+          </article>
+          <article class="events-panel">
+            <div class="events-head"><span>事件流</span><small>LIVE FEED</small><button id="eventPause" title="暂停事件流">Ⅱ</button></div>
+            <div class="event-list" id="eventList"></div>
+          </article>
+        </section>
+
+        <div class="section-heading system-heading"><div><span class="section-index">04</span><h2>主机资源</h2><span class="section-note">系统级采样</span></div><span class="sampling-label">采样间隔 1.2s</span></div>
+        <section class="system-grid">
+          <article class="resource-card cpu-card"><div class="resource-head"><span>CPU</span><b id="cpuPct">—</b></div><div class="resource-chart cpu-bars" id="cpuBars"></div><div class="resource-foot"><span id="cpuCores">Task Manager</span><span id="cpuLoad">—</span></div></article>
+          <article class="resource-card"><div class="resource-head"><span>内存</span><b id="ramPct">—</b></div><div class="resource-main"><div class="ring" id="ramRing"><span id="ramText">—<span>/— GB</span></span></div><div><strong>系统内存</strong><p id="ramCached">缓存 —</p><p id="ramAvailable">可用 —</p></div></div></article>
+          <article class="resource-card"><div class="resource-head"><span>磁盘</span><b id="diskPct">—</b></div><div class="disk-row"><div class="disk-icon">SSD</div><div><strong>所有磁盘</strong><p id="diskCapacity">Windows 性能计数器</p></div></div><div class="resource-foot"><span id="diskRead">读 —</span><span id="diskWrite">写 —</span></div></article>
+          <article class="process-card"><div class="resource-head"><span>进程</span><b class="green-text" id="processName">未找到推理进程</b></div><div class="process-main"><strong id="processExe">—</strong><span id="processPid">PID —</span></div><div class="process-stats"><span>CPU <b id="processCpu">—</b></span><span>内存 <b id="processMemory">—</b></span></div><div class="process-foot"><span id="processStatus">—</span><span>Task Manager</span></div></article>
+        </section>
+
+        <footer class="footer"><span>LOCAL AI WORKBENCH</span><span id="dataSource">数据来源：演示采样 · 正在探测本机后端</span><span id="clock">09:37:59</span></footer>
+      </main>
+    </div>
+    <script src="./daily-stats.js"></script>
+    <script src="./app.js"></script>
+    <script src="./skin-switch.js"></script>
+    <script src="./average-metrics.js"></script>
+  </body>
+</html>
