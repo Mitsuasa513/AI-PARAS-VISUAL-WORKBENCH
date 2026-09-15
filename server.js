@@ -254,12 +254,66 @@ function readLmStudioDailyStats() {
 async function readNvidia() {
   const query = ['--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw,power.limit,clocks.current.graphics,fan.speed,pstate', '--format=csv,noheader,nounits'];
   const output = await exec('nvidia-smi', query);
+  if (output) {
+    const gpus = output.split(/\r?\n/).filter(Boolean).map((line) => {
+      const p = line.split(',').map((v) => v.trim());
+      const number = (value) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; };
+      return { id: Number(p[0]), name: p[1], memory: number(p[2]) || 0, memoryTotal: number(p[3]) || 0, util: number(p[4]) || 0, temp: number(p[5]), power: number(p[6]), powerLimit: number(p[7]), clock: number(p[8]), fan: number(p[9]) || 0, pstate: p[10] || '—', proc: 'nvidia-smi · 本机 GPU' };
+    });
+    if (gpus.length) return gpus;
+  }
+  return readAmdRocm();
+}
+
+async function readAmdRocm() {
+  // AMD GPU via rocm-smi (ROCm 5.x+); returns [] if unavailable
+  const os = require('os').platform();
+  const isWin = os === 'win32';
+  const cmd = isWin ? 'cmd' : '/bin/sh';
+  const args = isWin ? ['/c', 'rocm-smi', '--showproductname', '--showuse', '--showmeminfo', 'vram', '--showtemp', '--showpower'] : ['-c', 'rocm-smi --showproductname --showuse --showmeminfo vram --showtemp --showpower 2>/dev/null'];
+  const output = await exec(cmd, args, 3000);
   if (!output) return null;
-  const gpus = output.split(/\r?\n/).filter(Boolean).map((line) => {
-    const p = line.split(',').map((v) => v.trim());
-    const number = (value) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; };
-    return { id: Number(p[0]), name: p[1], memory: number(p[2]) || 0, memoryTotal: number(p[3]) || 0, util: number(p[4]) || 0, temp: number(p[5]), power: number(p[6]), powerLimit: number(p[7]), clock: number(p[8]), fan: number(p[9]) || 0, pstate: p[10] || '—', proc: 'nvidia-smi · 本机 GPU' };
-  });
+
+  const gpus = [];
+  // rocm-smi output is tabular; try to parse GPU rows
+  const lines = output.split(/\r?\n/);
+  let current = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Detect a new GPU block (e.g. "GPU 0:" or a line starting with a GPU index)
+    const gpuMatch = line.match(/^GPU\s*(\d+):?/);
+    if (gpuMatch) {
+      if (current) gpus.push(current);
+      current = { id: Number(gpuMatch[1]), name: 'AMD GPU', memory: 0, memoryTotal: 0, util: 0, temp: null, power: null, powerLimit: null, clock: null, fan: null, pstate: '—', proc: 'rocm-smi · 本机 GPU' };
+      continue;
+    }
+    if (!current) continue;
+    const nameMatch = line.match(/(?:GPU Name|Product Name|Device Name)[^:]*:\s*(.+)/i);
+    if (nameMatch) { current.name = nameMatch[1].trim(); continue; }
+    const useMatch = line.match(/(?:GPU use|GPU utilization|Use)[^:]*:\s*([\d.]+)/i);
+    if (useMatch) { current.util = Number(useMatch[1]); continue; }
+    const memMatch = line.match(/(?:VRAM|Memory|Total Memory)[^:]*:\s*([\d.]+)\s*(MB|GB)/i);
+    if (memMatch) {
+      const val = Number(memMatch[1]);
+      const unit = memMatch[2].toUpperCase();
+      if (unit === 'GB') { current.memoryTotal = Math.round(val * 1024); }
+      else { current.memoryTotal = val; }
+      continue;
+    }
+    const usedMatch = line.match(/(?:Used|Allocated)[^:]*:\s*([\d.]+)\s*(MB|GB)/i);
+    if (usedMatch) {
+      const val = Number(usedMatch[1]);
+      const unit = usedMatch[2].toUpperCase();
+      current.memory = unit === 'GB' ? Math.round(val * 1024) : val;
+      continue;
+    }
+    const tempMatch = line.match(/(?:Temperature|Temp)[^:]*:\s*([\d.]+)/i);
+    if (tempMatch) { current.temp = Number(tempMatch[1]); continue; }
+    const powerMatch = line.match(/(?:Power|GPU Power)[^:]*:\s*([\d.]+)/i);
+    if (powerMatch) { current.power = Number(powerMatch[1]); continue; }
+  }
+  if (current) gpus.push(current);
   return gpus.length ? gpus : null;
 }
 
@@ -517,7 +571,7 @@ async function status(preferredBackend = 'auto') {
   const [gpus, inference, host] = await Promise.all([readNvidia(), probeInference(preferredBackend), readHost()]);
   const powerValues = (gpus || []).map((gpu) => gpu.power).filter(Number.isFinite);
   return {
-    source: gpus ? 'nvidia-smi' : 'demo',
+    source: gpus ? (gpus[0]?.proc?.startsWith('rocm-smi') ? 'rocm-smi' : 'nvidia-smi') : 'demo',
     gpus,
     power: { total: powerValues.length ? powerValues.reduce((sum, value) => sum + value, 0) : null, known: powerValues.length, gpuCount: gpus?.length || 0 },
     memory: host.memory,
