@@ -1,44 +1,44 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NEXUS // 霓虹矩阵</title>
-  <link rel="stylesheet" href="cyberpunk.css">
-</head>
-<body>
-  <div class="scanlines"></div>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">N//X</span><div><strong>NEXUS</strong><small>LOCAL INFERENCE ARRAY</small></div></div>
-    <div class="top-meta"><span class="signal"><i></i>本机链路在线</span><span id="clock">--:--:--</span></div>
-    <div class="controls"><label class="skin-control">皮肤 <select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option></select></label><label>后端 <select id="backendSelect"><option value="auto">自动</option></select></label><label>采样 <input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="intervalValue">1.2s</output></label><button id="refreshBtn" title="立即刷新">↻</button></div>
-  </header>
+s!doctype html>
+shtml lang="zh-CN">
+shead>
+  smeta charset="utf-8">
+  smeta name="viewport" content="width=device-width, initial-scale=1">
+  stitle>NEXUS // 霓虹矩阵s/title>
+  slink rel="stylesheet" href="cyberpunk.css">
+s/head>
+sbody>
+  sdiv class="scanlines">s/div>
+  sheader class="topbar">
+    sdiv class="brand">sspan class="brand-mark">N//Xs/span>sdiv>sstrong>NEXUSs/strong>ssmall>LOCAL INFERENCE ARRAYs/small>s/div>s/div>
+    sdiv class="top-meta">sspan class="signal">si>s/i>本机链路在线s/span>sspan id="clock">--:--:--s/span>s/div>
+    sdiv class="controls">slabel class="skin-control">皮肤 sselect id="skinSelect" aria-label="切换界面皮肤">soption value="index.html">原生控制台s/option>soption value="cyberpunk.html">霓虹矩阵s/option>soption value="apple.html">极简原生s/option>soption value="scroll.html">云水卷轴s/option>s/select>s/label>slabel>后端 sselect id="backendSelect">soption value="auto">自动s/option>s/select>s/label>slabel>采样 sinput id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2">soutput id="intervalValue">1.2ss/output>s/label>sbutton id="refreshBtn" title="立即刷新">↻s/button>s/div>
+  s/header>
 
-  <main>
-    <section class="masthead"><div><span class="kicker">SYSTEM TELEMETRY / 01</span><h1>本机资源 <em>控制层</em></h1><p id="dataSource">等待本机采样...</p></div><div class="mast-readout"><span>总功耗</span><strong id="totalPower">—</strong><b>W</b><small id="powerSummary">NVIDIA POWER BUS</small></div></section>
-    <section class="daily-section top-daily"><div class="section-head"><div><span class="kicker">DAILY OUTPUT / 01</span><h2>今日累计</h2></div><span class="daily-note" id="dailyRequests">等待 LM Studio 日志</span></div><div class="daily-grid"><article class="daily-card"><span>今日输入量</span><strong id="dailyInput">—</strong><small>PROMPT TOKENS</small></article><article class="daily-card"><span>今日输出量</span><strong id="dailyOutput">—</strong><small>GENERATED TOKENS</small></article><article class="daily-card total"><span>今日总量</span><strong id="dailyTotal">—</strong><small>INPUT + OUTPUT</small></article></div></section>
+  smain>
+    ssection class="masthead">sdiv>sspan class="kicker">SYSTEM TELEMETRY / 01s/span>sh1>本机资源 sem>控制层s/em>s/h1>sp id="dataSource">等待本机采样...s/p>s/div>sdiv class="mast-readout">sspan>总功耗s/span>sstrong id="totalPower">—s/strong>sb>Ws/b>ssmall id="powerSummary">NVIDIA POWER BUSs/small>s/div>s/section>
+    ssection class="daily-section top-daily">sdiv class="section-head">sdiv>sspan class="kicker">DAILY OUTPUT / 01s/span>sh2>今日累计s/h2>s/div>sspan class="daily-note" id="dailyRequests">等待 LM Studio 日志s/span>s/div>sdiv class="daily-grid">sarticle class="daily-card">sspan>今日输入量s/span>sstrong id="dailyInput">—s/strong>ssmall>PROMPT TOKENSs/small>s/article>sarticle class="daily-card">sspan>今日输出量s/span>sstrong id="dailyOutput">—s/strong>ssmall>GENERATED TOKENSs/small>s/article>sarticle class="daily-card total">sspan>今日总量s/span>sstrong id="dailyTotal">—s/strong>ssmall>INPUT + OUTPUTs/small>s/article>s/div>s/section>
 
-    <section class="host-grid">
-      <article class="hardware-panel cpu-panel"><div class="panel-label"><span>HOST / CPU</span><b id="cpuPct">—</b></div><div class="hardware-title"><span class="hardware-icon">CPU</span><div><h2 id="cpuModel">本机处理器</h2><p id="cpuSub">PROCESSOR TELEMETRY</p></div></div><div class="cpu-readout"><strong id="cpuLoadBig">—</strong><span>总使用率</span></div><div class="bar"><i id="cpuBar"></i></div><div class="spec-row"><span>物理核心 <b id="cpuCores">—</b></span><span>逻辑线程 <b id="cpuThreads">—</b></span><span>来源 <b>任务管理器</b></span></div><div class="micro-bars" id="cpuBars"></div></article>
-      <article class="hardware-panel memory-panel"><div class="panel-label"><span>HOST / MEMORY</span><b id="ramPct">—</b></div><div class="hardware-title"><span class="hardware-icon violet">RAM</span><div><h2 id="ramTitle">— GB</h2><p id="ramSub">内存总量 · DDR 型号未识别</p></div></div><div class="memory-readout"><strong id="ramUsed">—</strong><span>已占用</span><div class="memory-ring" id="memoryRing"><i></i></div></div><div class="bar violet-bar"><i id="ramBar"></i></div><div class="spec-row"><span>可用 <b id="ramAvailable">—</b></span><span>缓存 <b>—</b></span><span>带宽 <b>系统内存</b></span></div></article>
-    </section>
+    ssection class="host-grid">
+      sarticle class="hardware-panel cpu-panel">sdiv class="panel-label">sspan>HOST / CPUs/span>sb id="cpuPct">—s/b>s/div>sdiv class="hardware-title">sspan class="hardware-icon">CPUs/span>sdiv>sh2 id="cpuModel">本机处理器s/h2>sp id="cpuSub">PROCESSOR TELEMETRYs/p>s/div>s/div>sdiv class="cpu-readout">sstrong id="cpuLoadBig">—s/strong>sspan>总使用率s/span>s/div>sdiv class="bar">si id="cpuBar">s/i>s/div>sdiv class="spec-row">sspan>物理核心 sb id="cpuCores">—s/b>s/span>sspan>逻辑线程 sb id="cpuThreads">—s/b>s/span>sspan>来源 sb>任务管理器s/b>s/span>s/div>sdiv class="micro-bars" id="cpuBars">s/div>s/article>
+      sarticle class="hardware-panel memory-panel">sdiv class="panel-label">sspan>HOST / MEMORYs/span>sb id="ramPct">—s/b>s/div>sdiv class="hardware-title">sspan class="hardware-icon violet">RAMs/span>sdiv>sh2 id="ramTitle">— GBs/h2>sp id="ramSub">内存总量 · DDR 型号未识别s/p>s/div>s/div>sdiv class="memory-readout">sstrong id="ramUsed">—s/strong>sspan>已占用s/span>sdiv class="memory-ring" id="memoryRing">si>s/i>s/div>s/div>sdiv class="bar violet-bar">si id="ramBar">s/i>s/div>sdiv class="spec-row">sspan>可用 sb id="ramAvailable">—s/b>s/span>sspan>缓存 sb>—s/b>s/span>sspan>带宽 sb>系统内存s/b>s/span>s/div>s/article>
+    s/section>
 
-    <section class="section-head"><div><span class="kicker">ACCELERATOR ARRAY / 02</span><h2>显卡阵列</h2></div><span class="array-state"><i></i><b id="gpuCount">0 / 0</b> ONLINE</span></section>
-    <section class="gpu-grid" id="gpuGrid"></section>
+    ssection class="section-head">sdiv>sspan class="kicker">ACCELERATOR ARRAY / 02s/span>sh2>显卡阵列s/h2>s/div>sspan class="array-state">si>s/i>sb id="gpuCount">0 / 0s/b> ONLINEs/span>s/section>
+    ssection class="gpu-grid" id="gpuGrid">s/section>
 
-    <section class="section-head inference-head"><div><span class="kicker">INFERENCE CORE / 03</span><h2>推理信息</h2></div><div class="backend-pill" id="backendName">等待后端</div></section>
-    <section class="inference-grid">
-      <article class="inference-hero"><div class="panel-label"><span>当前推理实例</span><b id="modelStatus">未加载模型</b></div><h2 id="modelName">【未加载模型】</h2><p id="modelMeta">等待本机后端上报模型参数</p><div class="model-specs"><span>架构 <b id="modelArch">—</b></span><span>量化 <b id="modelQuant">—</b></span><span>上下文 <b id="modelContext">—</b></span></div></article>
-      <article class="metric-panel"><span class="metric-label">生成速度</span><strong id="genSpeed">—</strong><span class="unit">tok/s</span><small id="genWindow">等待指标</small><small>平均 <b id="genAverage">—</b> tok/s</small></article>
-      <article class="metric-panel magenta"><span class="metric-label">预填充速度</span><strong id="promptSpeed">—</strong><span class="unit">tok/s</span><small id="promptWindow">等待指标</small><small>平均 <b id="promptAverage">—</b> tok/s</small></article>
-      <article class="metric-panel amber"><span class="metric-label">上下文占用</span><strong id="contextUsed">—</strong><span class="unit" id="contextTotal"></span><div class="bar"><i id="contextBar"></i></div><small id="contextFoot">等待推理请求</small></article>
-    </section>
+    ssection class="section-head inference-head">sdiv>sspan class="kicker">INFERENCE CORE / 03s/span>sh2>推理信息s/h2>s/div>sdiv class="backend-pill" id="backendName">等待后端s/div>s/section>
+    ssection class="inference-grid">
+      sarticle class="inference-hero">sdiv class="panel-label">sspan>当前推理实例s/span>sb id="modelStatus">未加载模型s/b>s/div>sh2 id="modelName">【未加载模型】s/h2>sp id="modelMeta">等待本机后端上报模型参数s/p>sdiv class="model-specs">sspan>架构 sb id="modelArch">—s/b>s/span>sspan>量化 sb id="modelQuant">—s/b>s/span>sspan>上下文 sb id="modelContext">—s/b>s/span>s/div>s/article>
+      sarticle class="metric-panel">sspan class="metric-label">生成速度s/span>sstrong id="genSpeed">—s/strong>sspan class="unit">tok/ss/span>ssmall id="genWindow">等待指标s/small>ssmall>平均 sb id="genAverage">—s/b> tok/ss/small>s/article>
+      sarticle class="metric-panel magenta">sspan class="metric-label">预填充速度s/span>sstrong id="promptSpeed">—s/strong>sspan class="unit">tok/ss/span>ssmall id="promptWindow">等待指标s/small>ssmall>平均 sb id="promptAverage">—s/b> tok/ss/small>s/article>
+      sarticle class="metric-panel amber">sspan class="metric-label">上下文占用s/span>sstrong id="contextUsed">—s/strong>sspan class="unit" id="contextTotal">s/span>sdiv class="bar">si id="contextBar">s/i>s/div>ssmall id="contextFoot">等待推理请求s/small>s/article>
+    s/section>
 
-    <section class="task-strip"><div><span class="kicker">ACTIVE JOB</span><h2 id="taskTitle">【未加载模型】</h2></div><div class="task-state"><span id="taskStatus">未加载模型</span><b id="taskProgress">—</b></div><div class="task-id" id="taskId">IDLE</div></section>
-  </main>
-  <script src="daily-stats.js"></script>
-  <script src="cyberpunk.js"></script>
-  <script src="skin-switch.js"></script>
-  <script src="average-metrics.js"></script>
-</body>
-</html>
+    ssection class="task-strip">sdiv>sspan class="kicker">ACTIVE JOBs/span>sh2 id="taskTitle">【未加载模型】s/h2>s/div>sdiv class="task-state">sspan id="taskStatus">未加载模型s/span>sb id="taskProgress">—s/b>s/div>sdiv class="task-id" id="taskId">IDLEs/div>s/section>
+  s/main>
+  sscript src="i18n.js">s/script>`n  sscript src="daily-stats.js">s/script>
+  sscript src="cyberpunk.js">s/script>
+  sscript src="skin-switch.js">s/script>
+  sscript src="average-metrics.js">s/script>
+s/body>
+s/html>
