@@ -1,17 +1,27 @@
-# Local AI Workbench
+# Local AI Workbench / （老板视察喜欢的）本地AI工作台
 
 Zero-dependency, browser-based local monitoring dashboard for GPU, token
-generation speed (llama.cpp / LM Studio / Strata), power, CPU, memory, and
-daily token totals.
+generation speed (llama.cpp / LM Studio), power, CPU, memory, and daily
+token totals.
 
-## Requirements
+零依赖的本地监控面板，基于浏览器运行，实时显示 GPU 状态、token 生成速度（llama.cpp / LM Studio）、功耗、CPU、内存以及每日 token 总量。
+
+## Requirements / 环境要求
 
 - **Node.js >= 18** – auto-installed by `scripts/start.bat` (Windows) or
   `scripts/start.sh` (macOS/Linux) if not already present.
 - Optional: NVIDIA GPU + driver, llama.cpp server, or LM Studio server for
   real inference data.
 
-## Start
+  Node.js >= 18 – 若未安装，scripts/start.bat（Windows）或 scripts/start.sh（macOS/Linux）会自动安装。
+可选：NVIDIA GPU + 驱动、llama.cpp 服务或 LM Studio 服务，用于获取真实推理数据。
+
+## Install / 安装
+
+- Simply tell your Agent I want this and copy link to it.
+- 跟你的AI粘贴链接说，我要这个.
+
+## Start / 启动方式
 
 ### Windows
 
@@ -25,70 +35,36 @@ scripts\start.bat
 bash scripts/start.sh
 ```
 
-Open <http://127.0.0.1:4173> after startup.
+### OR ASK YOUR AI TO STARTUP IS OK / 或者问你的AI怎么启动也是可以的哦
 
-## Skins
+Open <http://127.0.0.1:4173> after startup. 启动浏览器输入地址即可启动工作台。
 
-| Skin            | URL                   |
+## Skins / 皮肤
+
+本工作台提供了5套皮肤 / 5 SKINS OFFERED IN THIS WORKBENCH 
+
+| Skin            | EFFECT                   |
 |-----------------|-----------------------|
-| Native Console  | `/` (index.html)      |
-| Neon Matrix     | `/cyberpunk.html`     |
-| Minimal Native  | `/apple.html`         |
-| Cloud Scroll    | `/scroll.html`        |
-| Emerald Garden  | `/oz.html`            |
+| Native Console  | ![AI Workbench 截图](EXAMPLES/EXAMPLE1-ORIGIN.png) |
+| Neon Matrix     | ![AI Workbench 截图](EXAMPLES/EXAMPLE2-CYBERPUNK.png)  |
+| Minimal Native  | ![AI Workbench 截图](EXAMPLES/EXAMPLE3-PUREWHITE.png) |
+| Cloud Scroll    | ![AI Workbench 截图](EXAMPLES/EXAMPLE4-ZENSCROLL.png)  |
+| Emerald Garden  | ![AI Workbench 截图](EXAMPLES/EXAMPLE5-OZ.png)  |
 
-## Environment Variables
+## Environment Variables / 环境变量
 
-| Variable       | Default                  | Notes                                    |
-|----------------|--------------------------|------------------------------------------|
-| `PORT`         | `4173`                   | HTTP port of the dashboard               |
-| `LLAMA_URL`    | `http://127.0.0.1:8080` | llama.cpp server (Strata is spotted here) |
-| `LMSTUDIO_URL` | `http://127.0.0.1:1234` | LM Studio server                         |
-| `STRATA_URL`   | `http://127.0.0.1:8080` | Strata, only when it runs on its own port |
+| Variable       | Default                  |
+|----------------|--------------------------|
+| `PORT`         | `4173`                   |
+| `LLAMA_URL`    | `http://127.0.0.1:8080` |
+| `LMSTUDIO_URL` | `http://127.0.0.1:1234` |
 
-## Data Sources (priority order)
+## Data Sources (priority order) / 数据来源
 
 1. `nvidia-smi` – GPU name, utilisation, memory, temp, power, fan, P-state
 2. LM Studio `server-logs/` – per-request prompt/eval tokens, daily totals
 3. LM Studio `conversations/` – fallback per-conversation stats
-4. Strata `/v1/status` + `/metrics` – model, live tok/s, VRAM/power, totals
-5. llama.cpp `/metrics` or `/slots` – prompt & generation tok/s
-6. Demo data – clearly labelled when no real source is reachable
+4. llama.cpp `/metrics` or `/slots` – prompt & generation tok/s
+5. Demo data – clearly labelled when no real source is reachable
 
 The server binds to `127.0.0.1` only. No data leaves the local machine.
-
-## Daily totals
-
-LM Studio writes a per-day server log, so its daily totals are read directly.
-llama.cpp and Strata do not, so the dashboard watches their cumulative token
-counters (`/metrics` for llama.cpp when `--metrics` is on, `/slots` deltas
-otherwise, Strata's `/metrics.totals`) and adds the difference to a local
-per-day file (`.daily-tokens.json`). The file resets on the local calendar day.
-The `/slots` fallback can miss a request that starts and ends between two
-polls; `--metrics` makes the llama.cpp numbers exact.
-
-## Files
-
-```
-server.js              Node.js HTTP server (no npm dependencies)
-index.html             Native Console skin
-cyberpunk.html         Neon Matrix skin
-apple.html             Minimal Native skin
-scroll.html            Cloud Scroll skin
-oz.html                Emerald Garden skin
-styles.css             Native Console styles
-cyberpunk.css          Cyberpunk styles
-apple.css              Apple styles
-scroll.css             Scroll styles
-oz.css                 Emerald Garden styles
-app.js                 Shared dashboard logic
-oz.js                  Emerald Garden dashboard logic
-daily-stats.js         Daily cumulative token counter
-average-metrics.js     Per-task average tok/s
-skin-switch.js         Skin selector
-i18n.js                Chinese / English labels
-scripts/start.bat      Windows launcher (auto-installs Node.js)
-scripts/start.sh       macOS/Linux launcher (auto-installs Node.js)
-scripts/ensure-node.bat Node.js check/install (Windows)
-scripts/ensure-node.sh  Node.js check/install (macOS/Linux)
-```

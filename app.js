@@ -338,13 +338,5 @@ function init() {
   fetchRealStatus().then((real) => { if (real) applyRealStatus(real); else sample(); scheduleNextSample(); });
 }
 
-function initLangToggle() {
-  var btn = langToggle;
-  if (!btn) return;
-  var update = function() { btn.textContent = window.i18n && window.i18n.lang === 'zh' ? 'EN' : '中'; };
-  btn.addEventListener('click', function() { window.i18n.toggle(); update(); });
-  update();
-}
-
-initLangToggle();
+// 语言切换统一交给 i18n.js（下拉菜单与旧版按钮都能用），这里不再重复绑定。
 init();

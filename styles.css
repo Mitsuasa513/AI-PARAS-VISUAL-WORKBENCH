@@ -138,3 +138,13 @@ h1 { margin: 0; font: 600 21px var(--mono); letter-spacing: 0; }
 .model-strip{min-width:0}
 .model-ident{min-width:0}
 .model-ident h1{overflow-wrap:anywhere;word-break:break-word;line-height:1.25}
+
+/* 左侧那列死菜单已移除：内容占满整宽，品牌标识移入顶栏。 */
+.app-shell{display:block}
+.main-content{max-width:1720px;margin-inline:auto;padding:0 34px 26px}
+.crumbs .brand-mark{margin-right:2px}
+
+/* 语言下拉（原生控制台）：跟皮肤/后端选择器同一套观感。 */
+.lang-control{display:flex;align-items:center;gap:7px;color:#aeb8c2;font:10px var(--mono);white-space:nowrap}
+.lang-control select{min-width:86px;padding:5px 20px 5px 7px;border:1px solid #35414d;outline:0;background:#151b22;color:var(--cyan);font:10px var(--mono)}
+.lang-control select:focus{border-color:var(--cyan)}

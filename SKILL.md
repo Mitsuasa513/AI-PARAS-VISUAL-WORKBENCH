@@ -22,6 +22,9 @@ A self-contained Node.js local monitoring dashboard. It displays:
   llama.cpp / Strata cumulative counters)
 - Host CPU, disk, and memory (Windows: `typeperf`; other OS: Node `os` module)
 - Five visual skins: Native Console, Cyberpunk, Apple, Scroll, Emerald Garden
+- Bilingual UI: every skin has a 简体中文 / English dropdown in its top bar
+  (the choice is remembered in `localStorage`; static labels and the live
+  values written by the page scripts are both translated)
 
 The server binds to `127.0.0.1` only and never sends data off-machine.
 
