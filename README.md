@@ -6,6 +6,17 @@ token totals.
 
 零依赖的本地监控面板，基于浏览器运行，实时显示 GPU 状态、token 生成速度（llama.cpp / LM Studio）、功耗、CPU、内存以及每日 token 总量。
 
+## 20261007更新
+- 加入了绿野仙踪皮肤，更护老板眼；
+- 加入了最近大火大热的Strata后端接入（它有Monitor，但老板需要看中文的时候可以看这个😃）；
+- BUG修复。
+
+## 20261007 Update
+
+- Added the **Wizard of Oz** skin — easier on the boss's eyes.
+- Added integration with **Strata**, the backend that's been all the rage lately. (It has a Monitor, but when the LAOBAN(boss) needs to read things in Chinese, this one does the trick 😃)
+- Bug fixes.
+
 ## Requirements / 环境要求
 
 - **Node.js >= 18** – auto-installed by `scripts/start.bat` (Windows) or
