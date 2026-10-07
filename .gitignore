@@ -1,0 +1,8 @@
+# runtime state written by server.js
+.daily-tokens.json
+.llama-metrics-cache.json
+
+# dependencies / OS noise
+node_modules/
+.DS_Store
+Thumbs.db

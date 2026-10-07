@@ -134,3 +134,7 @@ h1 { margin: 0; font: 600 21px var(--mono); letter-spacing: 0; }
 .daily-card strong{display:block;margin:12px 0 5px;color:var(--blue,#0071e3);font:500 clamp(25px,2.6vw,42px) var(--mono,monospace);letter-spacing:-.04em}
 .daily-card:nth-child(2) strong{color:#a05095}.daily-card.total strong{color:#c46a12}
 @media(max-width:700px){.daily-grid{grid-template-columns:1fr}.daily-card{min-height:118px}}
+/* 长模型名要换行显示，不能被单行省略号截掉。 */
+.model-strip{min-width:0}
+.model-ident{min-width:0}
+.model-ident h1{overflow-wrap:anywhere;word-break:break-word;line-height:1.25}

@@ -31,3 +31,8 @@ footer{width:min(1800px,calc(100% - 64px));max-width:none;padding-inline:0}
 .nav-title{font-weight:400}.welcome h1{font-size:clamp(34px,4.8vw,64px);font-weight:300;letter-spacing:-.018em}.section-title h2{font-size:24px;font-weight:400}.resource-card h2{font-size:clamp(19px,2.1vw,27px);font-weight:400;letter-spacing:-.015em}.gpu-card h3{font-size:clamp(21px,2.5vw,32px);font-weight:400;letter-spacing:-.02em}.model-card h2{font-size:clamp(19px,1.8vw,26px);font-weight:400}
 @media(max-width:950px){.daily-grid{grid-template-columns:1fr 1fr}.daily-card.total{grid-column:1/-1}}
 @media(max-width:620px){.daily-grid{grid-template-columns:1fr}.daily-card.total{grid-column:auto}}
+/* 长模型名要换行显示，不能被截断。 */
+.inference-layout>*{min-width:0}
+.model-card{min-width:0}
+.model-card h2{overflow-wrap:anywhere;word-break:break-word;line-height:1.22}
+.model-card p{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4}

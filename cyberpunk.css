@@ -16,3 +16,8 @@
 .daily-card:nth-child(2) strong{color:#f06bc5}.daily-card.total strong{color:#ffc857}
 .daily-note{color:#7e95b2;font:10px var(--mono)}
 @media(max-width:700px){.daily-grid{grid-template-columns:1fr}.daily-card{min-height:125px}}
+/* 长模型名要换行显示，不能被截断。 */
+.inference-grid>*{min-width:0}
+.inference-hero{min-width:0}
+.inference-hero h2{overflow-wrap:anywhere;word-break:break-word;line-height:1.22}
+.inference-hero p{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4}

@@ -31,6 +31,105 @@ let lastLlamaMetrics = (() => {
 function saveLlamaMetricsCache() {
   try { fs.writeFileSync(llamaMetricsCachePath, JSON.stringify(lastLlamaMetrics), 'utf8'); } catch (_) {}
 }
+
+// LM Studio 按天写服务器日志，所以“今日累计”可以直接读日志；llama.cpp 与 Strata 没有这种日志，
+// 但它们都提供“自启动以来”的累计 token 计数（llama.cpp 的 /metrics、Strata 的 /metrics.totals）。
+// 这里持续对计数求差，再按本机日期累加进 .daily-tokens.json，即可得到同样的今日累计。
+const dailyTokensPath = path.join(ROOT, '.daily-tokens.json');
+const activeBackends = new Map();
+let dailyTokens = (() => {
+  try {
+    const cached = JSON.parse(fs.readFileSync(dailyTokensPath, 'utf8'));
+    return {
+      date: typeof cached.date === 'string' ? cached.date : null,
+      promptTokens: Number(cached.promptTokens) || 0,
+      generatedTokens: Number(cached.generatedTokens) || 0,
+      requests: Number(cached.requests) || 0,
+      counters: cached.counters && typeof cached.counters === 'object' ? cached.counters : {},
+    };
+  } catch (_) {
+    return { date: null, promptTokens: 0, generatedTokens: 0, requests: 0, counters: {} };
+  }
+})();
+
+function saveDailyTokens() {
+  try { fs.writeFileSync(dailyTokensPath, JSON.stringify(dailyTokens), 'utf8'); } catch (_) {}
+}
+
+function localDateKey(now = new Date()) {
+  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+}
+
+function rollDailyTokens() {
+  const today = localDateKey();
+  if (dailyTokens.date !== today) {
+    dailyTokens = { date: today, promptTokens: 0, generatedTokens: 0, requests: 0, counters: {} };
+    activeBackends.clear();
+    saveDailyTokens();
+  }
+}
+
+// 一次“空闲 → 运行”的跳变记为一次请求。
+function noteBackendActivity(key, active) {
+  rollDailyTokens();
+  const previous = activeBackends.get(key) || false;
+  activeBackends.set(key, Boolean(active));
+  if (active && !previous) { dailyTokens.requests += 1; saveDailyTokens(); }
+}
+
+// 用后端的累计计数求差。后端重启后计数会归零，此时只重建基准，不把旧数据重复计入。
+// sinceSeconds 是后端本次启动的时间（秒）：如果它就在今天，那么“自启动以来”的累计值
+// 全部属于今天，可以直接拿来当今日累计的起点，不必等下一个请求才看到数字。
+function syncDailyCounters(key, promptTotal, generatedTotal, requestsTotal = null, sinceSeconds = null) {
+  rollDailyTokens();
+  const prompt = Number.isFinite(promptTotal) ? promptTotal : null;
+  const generated = Number.isFinite(generatedTotal) ? generatedTotal : null;
+  const requests = Number.isFinite(requestsTotal) ? requestsTotal : null;
+  if (prompt === null && generated === null && requests === null) return;
+  const previous = dailyTokens.counters[key];
+  if (!previous) {
+    const startedToday = Number.isFinite(sinceSeconds) && localDateKey(new Date(sinceSeconds * 1000)) === dailyTokens.date;
+    if (startedToday) {
+      if (prompt !== null && prompt > 0) dailyTokens.promptTokens += prompt;
+      if (generated !== null && generated > 0) dailyTokens.generatedTokens += generated;
+      if (requests !== null && requests > 0) dailyTokens.requests += requests;
+    }
+    dailyTokens.counters[key] = { promptTokens: prompt, generatedTokens: generated, requests };
+    saveDailyTokens();
+    return;
+  }
+  if (prompt !== null && Number.isFinite(previous.promptTokens) && prompt > previous.promptTokens) dailyTokens.promptTokens += prompt - previous.promptTokens;
+  if (generated !== null && Number.isFinite(previous.generatedTokens) && generated > previous.generatedTokens) dailyTokens.generatedTokens += generated - previous.generatedTokens;
+  if (requests !== null && Number.isFinite(previous.requests) && requests > previous.requests) dailyTokens.requests += requests - previous.requests;
+  dailyTokens.counters[key] = {
+    promptTokens: prompt === null ? previous.promptTokens : prompt,
+    generatedTokens: generated === null ? previous.generatedTokens : generated,
+    requests: requests === null ? previous.requests : requests,
+  };
+  saveDailyTokens();
+}
+
+// 后端只提供 /slots 增量时（llama.cpp 没开 --metrics），用每次采样拿到的 token 增量累加。
+function addDailyTokens(promptDelta, generatedDelta) {
+  rollDailyTokens();
+  let changed = false;
+  if (Number.isFinite(promptDelta) && promptDelta > 0) { dailyTokens.promptTokens += promptDelta; changed = true; }
+  if (Number.isFinite(generatedDelta) && generatedDelta > 0) { dailyTokens.generatedTokens += generatedDelta; changed = true; }
+  if (changed) saveDailyTokens();
+}
+
+function dailyTokensPayload(source) {
+  rollDailyTokens();
+  return {
+    date: dailyTokens.date,
+    generatedTokens: Math.round(dailyTokens.generatedTokens),
+    promptTokens: Math.round(dailyTokens.promptTokens),
+    totalTokens: Math.round(dailyTokens.generatedTokens + dailyTokens.promptTokens),
+    requests: dailyTokens.requests,
+    source,
+  };
+}
+
 const previousProcess = new Map();
 let conversationCache = null;
 let lmStudioLogCache = null;
@@ -372,11 +471,17 @@ async function readHost() {
 }
 
 async function probeInference(preferred = 'auto') {
+  const llamaUrl = process.env.LLAMA_URL || 'http://127.0.0.1:8080';
   const targets = [
-    { name: 'llama.cpp', url: process.env.LLAMA_URL || 'http://127.0.0.1:8080', type: 'llama', key: 'llama' },
+    { name: 'llama.cpp', url: llamaUrl, type: 'llama', key: 'llama' },
     { name: 'LM Studio', url: process.env.LMSTUDIO_URL || 'http://127.0.0.1:1234', type: 'lmstudio', key: 'lmstudio' },
   ];
-  const ordered = preferred && preferred !== 'auto' ? [...targets.filter((target) => target.key === preferred), ...targets.filter((target) => target.key !== preferred)] : targets;
+  // Strata 默认也监听 8080（和 llama.cpp 相同），所以只有显式给了 STRATA_URL 才单独探测它；
+  // 否则 8080 上的后端由自检接口 /v1/status 的 service 字段区分（见 probeTarget）。
+  const strataUrl = process.env.STRATA_URL;
+  if (strataUrl && strataUrl !== llamaUrl) targets.unshift({ name: 'Strata', url: strataUrl, type: 'strata', key: 'strata' });
+  const wanted = preferred === 'strata' && !targets.some((target) => target.key === 'strata') ? 'llama' : preferred;
+  const ordered = wanted && wanted !== 'auto' ? [...targets.filter((target) => target.key === wanted), ...targets.filter((target) => target.key !== wanted)] : targets;
   const results = (await Promise.all(ordered.map((target) => probeTarget(target)))).filter(Boolean);
   const selected = results[0];
   const backends = results.map((result) => ({ key: result.key, name: result.backend, loaded: Boolean(result.loaded), model: result.model || null }));
@@ -397,18 +502,32 @@ async function probeTarget(target) {
       const lmStatus = await lmStudioProbeInFlight;
       if (lmStatus) return { ...lmStatus, key: target.key, backends: undefined };
     }
+    if (target.type === 'strata') return await probeStrata(target);
     const response = await fetch(`${target.url}/v1/models`, { signal: AbortSignal.timeout(700) });
     if (!response.ok) return null;
     const data = await response.json();
     const models = Array.isArray(data.data) ? data.data.filter((item) => item && item.id) : [];
     const model = models[0];
     const loaded = models.length > 0;
+    // llama.cpp 与 Strata 都是 OpenAI 兼容、默认端口也一样，靠 /v1/status 才能分辨。
+    const strataStatus = await readStrataStatus(target.url);
+    if (strataStatus) return await probeStrata(target, strataStatus, model?.id || null);
     let metrics = null;
+    let metricsCounters = null;
+    let metricsStart = null;
     if (loaded) try {
       const metricsResponse = await fetch(`${target.url}/metrics`, { signal: AbortSignal.timeout(700) });
-      if (metricsResponse.ok) metrics = parseMetrics(await metricsResponse.text(), target.name);
+      if (metricsResponse.ok) {
+        metrics = parseMetrics(await metricsResponse.text(), target.name);
+        const counters = metrics?.counters;
+        if (counters && (Number.isFinite(counters.promptTokens) || Number.isFinite(counters.generatedTokens))) metricsCounters = counters;
+        // llama.cpp 的 /metrics 会用这个响应头说明它自己的启动时间。
+        const startHeader = metricsResponse.headers.get('Process-Start-Time-Unix');
+        if (startHeader) metricsStart = Number(startHeader);
+      }
     } catch (_) {}
     let slots = null;
+    let derived = null;
     if (loaded) {
       try {
         const slotsResponse = await fetch(`${target.url}/slots`, { signal: AbortSignal.timeout(700) });
@@ -416,7 +535,7 @@ async function probeTarget(target) {
           const slotPayload = await slotsResponse.json();
           slots = parseSlots(slotPayload);
           if (target.type === 'llama') {
-            const derived = deriveLlamaMetrics(slotPayload, model?.id || null);
+            derived = deriveLlamaMetrics(slotPayload, model?.id || null);
             metrics = {
               ...(metrics || {}),
               promptSpeed: Number.isFinite(derived.promptSpeed) ? derived.promptSpeed : (metrics?.promptSpeed ?? null),
@@ -426,8 +545,98 @@ async function probeTarget(target) {
         }
       } catch (_) {}
     }
-    return { connected: true, loaded, backend: target.name, url: target.url, model: model?.id || null, metrics, slots, details: null, key: target.key };
+    if (target.type === 'llama') {
+      // 今日累计：优先用 /metrics 的累计计数；没开 --metrics 就退回 /slots 的 token 增量。
+      if (metricsCounters) syncDailyCounters('llama', metricsCounters.promptTokens, metricsCounters.generatedTokens, null, metricsStart);
+      else if (derived) addDailyTokens(derived.promptDelta, derived.generationDelta);
+      noteBackendActivity('llama', Boolean(slots?.active || derived?.active));
+    }
+    return {
+      connected: true,
+      loaded,
+      backend: target.name,
+      url: target.url,
+      model: model?.id || null,
+      metrics,
+      slots,
+      details: null,
+      key: target.key,
+      daily: target.type === 'llama' ? dailyTokensPayload(metricsCounters ? 'llama.cpp /metrics 增量' : 'llama.cpp /slots 增量') : null,
+    };
   } catch (_) { return null; }
+}
+
+// Strata 的自述接口：/v1/status 给出模型、上下文窗口、并发与上一次请求的计时（llama.cpp 命名）。
+async function readStrataStatus(base) {
+  try {
+    const response = await fetch(`${base}/v1/status`, { signal: AbortSignal.timeout(700) });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data && data.service === 'strata' ? data : null;
+  } catch (_) { return null; }
+}
+
+// Strata 后端：/metrics 是 JSON（不是 llama.cpp 的 Prometheus 文本），实时速度、累计总量和硬件都在里面。
+async function probeStrata(target, known = null, modelId = null) {
+  const status = known || await readStrataStatus(target.url);
+  if (!status) return null;
+  let payload = null;
+  try {
+    const response = await fetch(`${target.url}/metrics`, { signal: AbortSignal.timeout(900) });
+    if (response.ok) payload = await response.json();
+  } catch (_) {}
+  const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  const live = payload?.live || null;
+  const engine = payload?.engine || {};
+  const totals = payload?.totals || null;
+  const timings = status.last_timings || null;
+  const state = typeof live?.state === 'string' ? live.state : null;
+  const busy = state === 'generating' || state === 'reading';
+  // 空闲时用 /metrics 里最近一次完成的请求，让卡片保留“最近一次推理”的读数。
+  const recent = Array.isArray(payload?.requests) && payload.requests.length ? payload.requests[0] : null;
+  const promptTokens = busy ? number(live?.prompt_tokens) : number(recent?.prompt_tokens);
+  const predictedTokens = busy ? number(live?.generated) : number(recent?.output_tokens);
+  const generationSpeed = (state === 'generating' ? number(live?.tok_s) : null) ?? number(timings?.predicted_per_second);
+  const promptSpeed = (busy ? number(live?.prefill_tok_s_mean) : null) ?? number(timings?.prompt_per_second);
+  const used = promptTokens !== null && predictedTokens !== null ? promptTokens + predictedTokens : null;
+  const total = number(engine.max_context) ?? number(status.cache_max_tokens) ?? null;
+  if (totals) syncDailyCounters('strata', number(totals.prompt_tokens), number(totals.output_tokens), number(totals.requests), number(totals.since));
+  noteBackendActivity('strata', busy);
+  const version = engine.version || status.engine || null;
+  return {
+    connected: true,
+    loaded: Boolean(status.loaded) || Boolean(modelId),
+    backend: 'Strata',
+    url: target.url,
+    model: status.model || modelId || engine.model || null,
+    key: 'strata',
+    metrics: { promptSpeed, generationSpeed, promptTokens, predictedTokens },
+    slots: {
+      active: busy,
+      used,
+      total,
+      promptTokens,
+      predictedTokens,
+      task: busy ? `当前推理请求 · ${state === 'reading' ? '读取提示词' : '生成中'}` : null,
+      parallel: number(status.concurrency?.serving),
+    },
+    details: {
+      displayName: status.model || engine.model || null,
+      architecture: null,
+      quantization: null,
+      parameters: null,
+      format: null,
+      backend: 'Strata',
+      backendVersion: version ? `Strata ${version}` : 'Strata',
+      contextLength: total,
+      parallel: number(status.concurrency?.serving) || number(engine.batch_slots),
+      expertSlots: number(engine.expert_slots),
+      kvType: typeof engine.kv === 'string' ? engine.kv : null,
+      prefillBatch: number(engine.prefill),
+      vision: status.vision?.enabled === true,
+    },
+    daily: dailyTokensPayload('Strata 累计计数'),
+  };
 }
 
 async function probeLmStudio(target) {
@@ -494,9 +703,10 @@ function deriveLlamaMetrics(payload, modelId = null) {
   const active = slots.find((slot) => slot.is_processing);
   if (!active) {
     const sameModel = !lastLlamaMetrics.model || !modelId || lastLlamaMetrics.model === modelId;
-    return sameModel
+    const speeds = sameModel
       ? { promptSpeed: lastLlamaMetrics.promptSpeed, generationSpeed: lastLlamaMetrics.generationSpeed }
       : { promptSpeed: null, generationSpeed: null };
+    return { ...speeds, promptDelta: null, generationDelta: null, active: false };
   }
   const decoded = Number(active.next_token?.[0]?.n_decoded ?? active.n_decoded ?? active.n_tokens_predicted);
   const promptProcessed = Number(active.n_prompt_tokens_processed);
@@ -511,15 +721,23 @@ function deriveLlamaMetrics(payload, modelId = null) {
   const isNewTask = (lastLlamaMetrics.taskId !== null && lastLlamaMetrics.taskId !== taskId) || counterReset;
   let promptSpeed = isNewTask ? null : (previous?.lastPromptSpeed ?? lastLlamaMetrics.promptSpeed ?? null);
   let generationSpeed = isNewTask ? null : (previous?.lastGenerationSpeed ?? lastLlamaMetrics.generationSpeed ?? null);
+  let promptDelta = null;
+  let generationDelta = null;
   if (previous && now > previous.at) {
     const seconds = (now - previous.at) / 1000;
-    const generationDelta = Number.isFinite(decoded) && Number.isFinite(previous.decoded) && decoded >= previous.decoded ? decoded - previous.decoded : null;
-    const promptDelta = Number.isFinite(promptProcessed) && Number.isFinite(previous.promptProcessed) && promptProcessed >= previous.promptProcessed ? promptProcessed - previous.promptProcessed : null;
-    if (Number.isFinite(generationDelta) && generationDelta > 0) generationSpeed = generationDelta / seconds;
-    if (Number.isFinite(promptDelta) && promptDelta > 0) promptSpeed = promptDelta / seconds;
+    const generationStep = Number.isFinite(decoded) && Number.isFinite(previous.decoded) && decoded >= previous.decoded ? decoded - previous.decoded : null;
+    const promptStep = Number.isFinite(promptProcessed) && Number.isFinite(previous.promptProcessed) && promptProcessed >= previous.promptProcessed ? promptProcessed - previous.promptProcessed : null;
+    if (Number.isFinite(generationStep) && generationStep > 0) { generationSpeed = generationStep / seconds; generationDelta = generationStep; }
+    if (Number.isFinite(promptStep) && promptStep > 0) { promptSpeed = promptStep / seconds; promptDelta = promptStep; }
   } else if (Number.isFinite(pollSeconds) && pollSeconds > 0.05 && pollSeconds < 10) {
     if (Number.isFinite(decoded) && decoded > 0) generationSpeed = decoded / pollSeconds;
     if (Number.isFinite(promptProcessed) && promptProcessed > 0) promptSpeed = promptProcessed / pollSeconds;
+  }
+  // 今日累计的增量：计数器归零只可能是新任务，这时当前值就是这一段已产生的 token；
+  // 任务第一次被采样（没有上一份快照）时同理。
+  if (!previous || counterReset) {
+    if (Number.isFinite(decoded) && decoded > 0) generationDelta = decoded;
+    if (Number.isFinite(promptProcessed) && promptProcessed > 0) promptDelta = promptProcessed;
   }
   const validPromptSpeed = Number.isFinite(promptSpeed) && promptSpeed > 0 ? promptSpeed : null;
   const validGenerationSpeed = Number.isFinite(generationSpeed) && generationSpeed > 0 ? generationSpeed : null;
@@ -534,7 +752,7 @@ function deriveLlamaMetrics(payload, modelId = null) {
     };
     saveLlamaMetricsCache();
   }
-  return { promptSpeed: validPromptSpeed, generationSpeed: validGenerationSpeed };
+  return { promptSpeed: validPromptSpeed, generationSpeed: validGenerationSpeed, promptDelta, generationDelta, active: true };
 }
 
 function metricValue(text, names) {
@@ -564,6 +782,8 @@ function parseMetrics(text, backend) {
   return {
     promptSpeed: rate(snapshot.promptTokens, snapshot.promptSeconds, previous?.promptTokens, previous?.promptSeconds),
     generationSpeed: rate(snapshot.predictedTokens, snapshot.predictedSeconds, previous?.predictedTokens, previous?.predictedSeconds),
+    // 累计计数本身也要带出去：今日累计靠它求差。
+    counters: { promptTokens: snapshot.promptTokens, generatedTokens: snapshot.predictedTokens },
   };
 }
 

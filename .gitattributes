@@ -1,0 +1,4 @@
+# 统一行尾：仓库里文本一律 LF，Windows 批处理保留 CRLF
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

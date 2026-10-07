@@ -60,8 +60,11 @@ function setModelLoaded(inference) {
   $('modelQuant').textContent = [details.quantization, details.format?.toUpperCase()].filter(Boolean).join(' · ') || '—';
   $('modelContext').textContent = Number.isFinite(details.contextLength) ? `${fmt(details.contextLength)} tokens` : '—';
   const runtime = [];
+  if (details.backendVersion) runtime.push(details.backendVersion);
   if (Number.isFinite(details.evalBatchSize)) runtime.push(`Batch ${fmt(details.evalBatchSize)}`);
   if (Number.isFinite(details.parallel)) runtime.push(`并行 ${details.parallel}`);
+  if (details.kvType) runtime.push(`KV ${details.kvType}`);
+  if (Number.isFinite(details.expertSlots)) runtime.push(`专家槽 ${fmt(details.expertSlots)}`);
   if (details.flashAttention) runtime.push('Flash Attn');
   if (details.mtp) runtime.push('MTP');
   $('modelRuntime').textContent = runtime.join(' · ') || '—';
@@ -150,7 +153,7 @@ function applyRealStatus(data) {
     state.powerCurrent = null;
     $('totalPower').textContent = '—'; $('powerUnit').textContent = ''; $('powerPeak').textContent = '—'; $('powerSummary').textContent = '等待 nvidia-smi';
   }
-  const backendLabel = inference.connected ? `${inference.backend}${loaded ? ' 已加载模型' : ' 未加载模型'}` : '未检测到 llama.cpp / LM Studio';
+  const backendLabel = inference.connected ? `${inference.backend}${loaded ? ' 已加载模型' : ' 未加载模型'}` : '未检测到 llama.cpp / LM Studio / Strata';
   $('dataSource').textContent = `${state.nvidiaAvailable ? 'GPU：' + state.gpuSource : 'GPU：未检测到 GPU 驱动'} · 主机：Task Manager 性能计数器 · ${backendLabel}`;
   renderGpus(); renderSystem();
   return true;
@@ -314,7 +317,7 @@ async function refreshNow() {
 
 function init() {
   renderGpus(); renderSystem(); setModelUnavailable();
-  addEvent('任务', '等待 llama.cpp / LM Studio 加载模型');
+  addEvent('任务', '等待 llama.cpp / LM Studio / Strata 加载模型');
   addEvent('功耗', '等待 nvidia-smi 全卡功耗采样');
   $('liveToggle').addEventListener('change', (event) => { state.live = event.target.checked; $('pauseBtn').querySelector('em').textContent = state.live ? '暂停采样' : '继续采样'; });
   $('pauseBtn').addEventListener('click', () => { state.live = !state.live; $('liveToggle').checked = state.live; $('pauseBtn').querySelector('em').textContent = state.live ? '暂停采样' : '继续采样'; });

@@ -29,3 +29,10 @@ footer{width:min(1800px,calc(100% - 64px));max-width:none;padding:19px 0 30px}
 @media(max-width:930px){main,footer{width:calc(100% - 44px)}.token-grid{grid-template-columns:1fr 1fr}.token-stat.total{grid-column:1/-1}}
 @media(max-width:620px){main,footer{width:calc(100% - 32px)}.scroll-nav{padding-inline:16px}.token-head{align-items:flex-start;flex-direction:column;gap:8px}.token-note{padding-bottom:0}.token-grid{grid-template-columns:1fr}.token-stat.total{grid-column:auto}}
 .daily-head{margin-top:8px}.daily-grid{margin-bottom:30px}
+
+/* 长模型名（例如完整的 .gguf 路径）要换行显示，不能被单行省略号截掉。 */
+.inference-grid>*{min-width:0}
+.model-panel{min-width:0}
+.model-panel h2{white-space:normal;overflow:hidden;text-overflow:clip;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-height:1.14;overflow-wrap:anywhere;word-break:break-word}
+.model-panel p{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4}
+@media(max-width:620px){.model-panel h2{-webkit-line-clamp:4}}

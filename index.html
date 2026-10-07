@@ -36,7 +36,7 @@
         <header class="topbar">
           <div class="crumbs"><span>工作台</span><i>/</i><strong>实时总览</strong></div>
           <div class="top-actions">
-            <label class="skin-control" title="切换界面皮肤"><span data-i18n="skin">皮肤</span><select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option></select></label>
+            <label class="skin-control" title="切换界面皮肤"><span data-i18n="skin">皮肤</span><select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option><option value="oz.html">绿野仙踪</option></select></label>
             <label class="live-toggle" title="切换实时采样">
               <input id="liveToggle" type="checkbox" checked />
               <span class="toggle-track"><span></span></span>
@@ -59,7 +59,7 @@
           </div>
         </header>
 
-        <div class="section-heading daily-heading"><div><span class="section-index">01</span><h2 data-i18n="daily">今日累计</h2><span class="section-note" id="dailyRequests">等待 LM Studio 日志</span></div></div>
+        <div class="section-heading daily-heading"><div><span class="section-index">01</span><h2 data-i18n="daily">今日累计</h2><span class="section-note" id="dailyRequests">等待后端上报今日累计</span></div></div>
         <section class="daily-grid" aria-label="今日累计 token"><article class="daily-card"><span data-i18n="daily_in">今日输入量</span><strong id="dailyInput">—</strong><small>PROMPT TOKENS</small></article><article class="daily-card"><span data-i18n="daily_out">今日输出量</span><strong id="dailyOutput">—</strong><small>GENERATED TOKENS</small></article><article class="daily-card total"><span data-i18n="daily_total">今日总量</span><strong id="dailyTotal">—</strong><small>INPUT + OUTPUT</small></article></section>
 
         <section class="model-strip">
