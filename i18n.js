@@ -234,6 +234,8 @@
     "z_seal_cpu": "核",
     "z_seal_ram": "藏",
     "z_seal_power": "爽",
+    "z_peak": "峰值",
+    "z_peak_dot": "· 峰值",
     "z_title_native": "Local AI Workbench · 原生控制台",
     "z_title_apple": "本机 AI 工作台 · 极简原生",
     "z_title_cyberpunk": "NEXUS // 霓虹矩阵",
@@ -476,6 +478,8 @@
     "z_seal_cpu": "C",
     "z_seal_ram": "R",
     "z_seal_power": "W",
+    "z_peak": "Peak",
+    "z_peak_dot": "· Peak",
     "z_title_native": "Local AI Workbench · Native Console",
     "z_title_apple": "Local AI Workbench · Minimal",
     "z_title_cyberpunk": "NEXUS // Neon Matrix",
@@ -529,8 +533,9 @@
     [' 在线', ' online'],
   ];
 
-  function translate(text) {
-    if (lang !== 'en' || typeof text !== 'string' || !text) return text;
+  // 把一段中文换成英文（与当前语言无关；还原判断也要用它）
+  function toEnglish(text) {
+    if (typeof text !== 'string' || !text) return text;
     const key = text.trim();
     if (!key) return text;
     if (REVERSE[key]) return text.replace(key, REVERSE[key]);
@@ -540,6 +545,10 @@
       return text.replace(key, (REVERSE[head] || head) + en);
     }
     return text;
+  }
+
+  function translate(text) {
+    return lang === 'en' ? toEnglish(text) : text;
   }
 
   function tr(text) { return translate(String(text)); }
@@ -552,12 +561,15 @@
       const current = node.nodeValue;
       if (!current || !current.trim()) return;
       let raw = originals.get(node);
-      // 页面脚本直接改过这个文本节点时，以当前值作为新的原文
-      if (raw === undefined || (current !== raw && current !== translate(raw))) {
+      if (raw === undefined) {
+        originals.set(node, current);
+        raw = current;
+      } else if (current !== raw && current !== toEnglish(raw)) {
+        // 既不是原文、也不是它的英文形式 -> 页面脚本写了新内容，以当前值作为新原文
         originals.set(node, current);
         raw = current;
       }
-      const next = translate(raw);
+      const next = lang === 'en' ? toEnglish(raw) : raw;
       if (current !== next) node.nodeValue = next;
       return;
     }
@@ -625,7 +637,7 @@
     watch();
   }
 
-  window.i18n = { t, tr, translate, apply, applyDom, setLang, toggle, wireControls, start, get lang() { return lang; } };
+  window.i18n = { t, tr, translate, toEnglish, apply, applyDom, setLang, toggle, wireControls, start, get lang() { return lang; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 }());

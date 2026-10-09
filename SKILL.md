@@ -18,6 +18,9 @@ A self-contained Node.js local monitoring dashboard. It displays:
 - GPU name, utilisation, memory, temperature, power draw, fan speed, P-state
   (via `nvidia-smi`; falls back to demo data if unavailable)
 - Token generation and prompt speed (llama.cpp `:8080` or LM Studio `:1234`)
+- Per-task average **and peak** tok/s for both generation and prompt speed. The
+  two share one window (they reset together when the model changes or a new
+  task starts), so the peak can be read directly against the average.
 - Per-task and daily cumulative token counts (LM Studio server logs, or the
   llama.cpp / Strata cumulative counters)
 - Host CPU, disk, and memory (Windows: `typeperf`; other OS: Node `os` module)
