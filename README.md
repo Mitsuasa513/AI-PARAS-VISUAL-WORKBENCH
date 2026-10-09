@@ -6,6 +6,17 @@ token totals.
 
 零依赖的本地监控面板，基于浏览器运行，实时显示 GPU 状态、token 生成速度（llama.cpp / LM Studio）、功耗、CPU、内存以及每日 token 总量。
 
+## 20261009更新
+- 推理面板加了「峰值」：生成速度和预填充速度除了平均，还会显示本次任务跑到的最高值（和平均同一个统计窗口，换模型或开新任务时一起清零），方便看性能上限；
+- 修了个隐蔽的 BUG：切到英文再切回简体中文，界面文字现在能完整还原（之前会残留英文）；
+- BUG修复。
+
+## 20261009 Update
+
+- Added a **peak** number next to the average for both generation and prompt speed. Same window as the average (they reset together when the model changes or a new task starts), so you can read the ceiling against the mean — handy when tuning.
+- Fixed a sneaky one: switching back to 简体中文 now restores the whole UI (it used to stay English).
+- Bug fixes.
+
 ## 20261007更新
 - 加入了绿野仙踪皮肤，更护老板眼；
 - 加入了最近大火大热的Strata后端接入（它有Monitor，但老板需要看中文的时候可以看这个😃）；
