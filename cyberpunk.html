@@ -1,46 +1,43 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>NEXUS // 霓虹矩阵</title>
-  <link rel="stylesheet" href="cyberpunk.css">
+  <link rel="stylesheet" href="compact-base.css"><link rel="stylesheet" href="cyber-compact.css"><link rel="stylesheet" href="fonts.css">
 </head>
-<body>
-  <div class="scanlines"></div>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">N//X</span><div><strong>NEXUS</strong><small>LOCAL INFERENCE ARRAY</small></div></div>
-    <div class="top-meta"><span class="signal"><i></i>本机链路在线</span><span id="clock">--:--:--</span></div>
-    <div class="controls"><label class="skin-control">皮肤 <select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option><option value="oz.html">绿野仙踪</option></select></label><label>后端 <select id="backendSelect"><option value="auto">自动</option></select></label><label>采样 <input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="intervalValue">1.2s</output></label><label class="lang-control">语言<select id="langSelect" aria-label="切换语言 / Language"><option value="zh">简体中文</option><option value="en">English</option></select></label>
-            <button id="refreshBtn" title="立即刷新">↻</button></div>
-  </header>
-
-  <main>
-    <section class="masthead"><div><span class="kicker">SYSTEM TELEMETRY / 01</span><h1>本机资源 <em>控制层</em></h1><p id="dataSource">等待本机采样...</p></div><div class="mast-readout"><span>总功耗</span><strong id="totalPower">—</strong><b>W</b><small id="powerSummary">NVIDIA POWER BUS</small></div></section>
-    <section class="daily-section top-daily"><div class="section-head"><div><span class="kicker">DAILY OUTPUT / 01</span><h2>今日累计</h2></div><span class="daily-note" id="dailyRequests">等待后端上报今日累计</span></div><div class="daily-grid"><article class="daily-card"><span>今日输入量</span><strong id="dailyInput">—</strong><small>PROMPT TOKENS</small></article><article class="daily-card"><span>今日输出量</span><strong id="dailyOutput">—</strong><small>GENERATED TOKENS</small></article><article class="daily-card total"><span>今日总量</span><strong id="dailyTotal">—</strong><small>INPUT + OUTPUT</small></article></div></section>
-
-    <section class="host-grid">
-      <article class="hardware-panel cpu-panel"><div class="panel-label"><span>HOST / CPU</span><b id="cpuPct">—</b></div><div class="hardware-title"><span class="hardware-icon">CPU</span><div><h2 id="cpuModel">本机处理器</h2><p id="cpuSub">PROCESSOR TELEMETRY</p></div></div><div class="cpu-readout"><strong id="cpuLoadBig">—</strong><span>总使用率</span></div><div class="bar"><i id="cpuBar"></i></div><div class="spec-row"><span>物理核心 <b id="cpuCores">—</b></span><span>逻辑线程 <b id="cpuThreads">—</b></span><span>来源 <b>任务管理器</b></span></div><div class="micro-bars" id="cpuBars"></div></article>
-      <article class="hardware-panel memory-panel"><div class="panel-label"><span>HOST / MEMORY</span><b id="ramPct">—</b></div><div class="hardware-title"><span class="hardware-icon violet">RAM</span><div><h2 id="ramTitle">— GB</h2><p id="ramSub">内存总量 · DDR 型号未识别</p></div></div><div class="memory-readout"><strong id="ramUsed">—</strong><span>已占用</span><div class="memory-ring" id="memoryRing"><i></i></div></div><div class="bar violet-bar"><i id="ramBar"></i></div><div class="spec-row"><span>可用 <b id="ramAvailable">—</b></span><span>缓存 <b>—</b></span><span>带宽 <b>系统内存</b></span></div></article>
-    </section>
-
-    <section class="section-head"><div><span class="kicker">ACCELERATOR ARRAY / 02</span><h2>显卡阵列</h2></div><span class="array-state"><i></i><b id="gpuCount">0 / 0</b> ONLINE</span></section>
-    <section class="gpu-grid" id="gpuGrid"></section>
-
-    <section class="section-head inference-head"><div><span class="kicker">INFERENCE CORE / 03</span><h2>推理信息</h2></div><div class="backend-pill" id="backendName">等待后端</div></section>
-    <section class="inference-grid">
-      <article class="inference-hero"><div class="panel-label"><span>当前推理实例</span><b id="modelStatus">未加载模型</b></div><h2 id="modelName">【未加载模型】</h2><p id="modelMeta">等待本机后端上报模型参数</p><div class="model-specs"><span>架构 <b id="modelArch">—</b></span><span>量化 <b id="modelQuant">—</b></span><span>上下文 <b id="modelContext">—</b></span></div></article>
-      <article class="metric-panel"><span class="metric-label">生成速度</span><strong id="genSpeed">—</strong><span class="unit">tok/s</span><small id="genWindow">等待指标</small><small>平均 <b id="genAverage">—</b> tok/s</small></article>
-      <article class="metric-panel magenta"><span class="metric-label">预填充速度</span><strong id="promptSpeed">—</strong><span class="unit">tok/s</span><small id="promptWindow">等待指标</small><small>平均 <b id="promptAverage">—</b> tok/s</small></article>
-      <article class="metric-panel amber"><span class="metric-label">上下文占用</span><strong id="contextUsed">—</strong><span class="unit" id="contextTotal"></span><div class="bar"><i id="contextBar"></i></div><small id="contextFoot">等待推理请求</small></article>
-    </section>
-
-    <section class="task-strip"><div><span class="kicker">ACTIVE JOB</span><h2 id="taskTitle">【未加载模型】</h2></div><div class="task-state"><span id="taskStatus">未加载模型</span><b id="taskProgress">—</b></div><div class="task-id" id="taskId">IDLE</div></section>
-  </main>
-  <script src="i18n.js"></script>
-  <script src="daily-stats.js"></script>
-  <script src="cyberpunk.js"></script>
-  <script src="skin-switch.js"></script>
-  <script src="average-metrics.js"></script>
+<body class="skin-cyber fixed-fit">
+  <div class="page-stage" id="pageStage">
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="skin-nav">
+      <a class="skin-logo" href="/" aria-label="NEXUS">N</a>
+      <div class="skin-brand"><div class="brand-copy"><strong class="brand-name">NEXUS</strong><span class="brand-sub">LOCAL INFERENCE ARRAY / NEON</span></div></div>
+      <div class="nav-status"><b class="build-version">v2.0.1</b><span class="signal" data-i18n="z_link_online">本机链路在线</span><b id="clock">--:--:--</b></div>
+      <div class="controls">
+        <label><span data-i18n="skin">皮肤</span><select id="skinSelect"><option value="index.html" data-i18n="skin_native">原生控制台</option><option value="cyberpunk.html" data-i18n="skin_cyberpunk">霓虹矩阵</option><option value="apple.html" data-i18n="skin_apple">极简原生</option><option value="scroll.html" data-i18n="skin_scroll">云水卷轴</option><option value="oz.html" data-i18n="skin_oz">绿野仙踪</option></select></label>
+        <label><span data-i18n="lang">语言</span><select id="langSelect"><option value="zh">简体中文</option><option value="en">English</option></select></label>
+        <label><span data-i18n="backend">后端</span><select id="backendSelect"><option value="auto">自动</option></select></label>
+        <label><span data-i18n="refresh">刷新</span><input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="intervalValue">1.2s</output></label>
+        <button id="refreshBtn" title="立即刷新">↻</button>
+      </div>
+    </header>
+    <main class="dashboard">
+      <section class="hero"><div class="hero-copy"><span class="kicker">SYSTEM TELEMETRY / NEON GRID</span><h1>本机资源 <em>控制层</em></h1><p id="dataSource">GPU：等待采样 · 主机：等待采样 · 推理后端：等待检测</p></div><div class="power-stamp"><div><span data-i18n="total_power">总功耗</span><div class="power-value"><strong id="totalPower">—</strong><b>W</b></div><small id="powerSummary" data-i18n="gpu_power_bus">GPU 全卡合计</small></div><span class="power-emblem" aria-hidden="true"></span></div></section>
+      <section class="section-block inference-block"><div class="section-head"><div class="section-title"><span class="section-kicker">03 /</span><h2 data-i18n="z_inference_info">推理信息</h2></div><span class="backend-label" id="backendName" data-i18n="wait_backend">等待后端</span></div><div class="inference-grid">
+        <article class="model-card"><div class="panel-top"><span data-i18n="current_instance">当前推理实例</span><b id="modelStatus" data-i18n="not_loaded">未加载模型</b></div><h2 class="model-name" id="modelName" data-i18n="no_model">【未加载模型】</h2><p class="model-meta" id="modelMeta" data-i18n="wait_backend_params">等待本机后端上报模型参数</p><div class="model-specs"><span><span data-i18n="arch">架构</span> <b id="modelArch">—</b></span><span><span data-i18n="quant">量化</span> <b id="modelQuant">—</b></span><span><span data-i18n="inference_engine">推理引擎</span> <b id="modelEngine">—</b></span><span><span data-i18n="context">上下文</span> <b id="modelContext">—</b></span><span class="expert-spec"><span data-i18n="expert_count">专家数</span> <b id="modelExperts">—</b><small id="modelExpertsHint">—</small></span></div></article>
+        <article class="metric-card gen-metric"><span data-i18n="gen_speed">生成速度</span><div class="metric-value"><strong id="genSpeed">—</strong><small>tok/s</small></div><div class="metric-foot"><b id="genWindow">—</b> · <span data-i18n="avg">平均</span> <b id="genAverage">—</b> · <span data-i18n="z_peak">峰值</span> <b id="genPeak">—</b></div><div class="spark-chart"><svg id="genSpark" viewBox="0 0 160 34" role="img" preserveAspectRatio="none"><path class="spark-grid" d="M0 29H160"/><path class="spark-area" id="genSparkArea" d=""/><path class="spark-line" id="genSparkLine" d=""/><circle class="spark-dot" id="genSparkDot" cx="0" cy="17" r="2.2"/></svg></div></article>
+        <article class="metric-card prompt-metric"><span data-i18n="prompt_speed">预填充速度</span><div class="metric-value"><strong id="promptSpeed">—</strong><small>tok/s</small></div><div class="metric-foot"><b id="promptWindow">—</b> · <span data-i18n="avg">平均</span> <b id="promptAverage">—</b> · <span data-i18n="z_peak">峰值</span> <b id="promptPeak">—</b></div><div class="spark-chart"><svg id="promptSpark" viewBox="0 0 160 34" role="img" preserveAspectRatio="none"><path class="spark-grid" d="M0 29H160"/><path class="spark-area" id="promptSparkArea" d=""/><path class="spark-line" id="promptSparkLine" d=""/><circle class="spark-dot" id="promptSparkDot" cx="0" cy="17" r="2.2"/></svg></div></article>
+        <article class="context-card"><div class="panel-top"><span data-i18n="context_used">上下文占用</span><b id="contextFoot">—</b></div><div class="context-number"><strong id="contextUsed">—</strong><span id="contextTotal"></span><small id="taskProgress">—</small></div><div class="meter"><i id="contextBar"></i></div><div class="activity-card" data-state="waiting"><span class="activity-dot"></span><div class="activity-copy"><b id="activityLabel" data-i18n="wait_inference">等待推理请求</b><p id="activityDetail">推理槽位空闲</p></div><span class="task-id" id="taskId">IDLE</span></div><p class="task-title" id="taskTitle">当前没有活动推理请求</p></article>
+      </div></section>
+      <section class="section-block gpu-block"><div class="section-head"><div class="section-title"><span class="section-kicker">02 /</span><h2 data-i18n="z_gpu_array">显卡阵列</h2></div><span class="section-status"><i></i><b id="gpuCount">0 / 0</b> <span data-i18n="gpu_online">ONLINE</span></span></div><section class="gpu-grid" id="gpuGrid"></section></section>
+      <section class="bottom-grid">
+        <article class="host-card"><div class="panel-top"><span>HOST / CPU</span><b id="cpuPct">—</b></div><div class="host-title"><span class="host-glyph">C</span><div><h2 id="cpuModel">本机处理器</h2><p id="cpuSub">PROCESSOR TELEMETRY</p></div></div><div class="host-readouts"><strong id="cpuLoadBig">—</strong><span data-i18n="z_total_usage">总使用率</span><strong id="cpuClock">—</strong><span>MHz</span><strong class="temp-read" id="cpuTemp">—°C</strong><span id="cpuTempLabel" data-i18n="z_cpu_temp">CPU 温度</span></div><div class="meter"><i id="cpuBar"></i></div><div class="host-specs"><span data-i18n="z_physical_cores">物理核心</span> <b id="cpuCores">—</b><span data-i18n="z_logic_threads">逻辑线程</span> <b id="cpuThreads">—</b><span data-i18n="z_temp_source">温度来源</span> <b id="cpuTempSource">—</b></div></article>
+        <article class="host-card"><div class="panel-top"><span>HOST / MEMORY</span><b id="ramPct">—</b></div><div class="host-title"><span class="host-glyph">R</span><div><h2 id="ramTitle">— GB</h2><p id="ramSub" data-i18n="z_mem_total_capacity">内存总量 · 容量与占用</p></div></div><div class="host-readouts"><strong id="ramUsed">—</strong><span data-i18n="z_used">已使用</span><strong class="temp-read" id="ramAvailable">—</strong><span data-i18n="available">可用</span></div><div class="meter"><i id="ramBar"></i></div><div class="host-specs"><span data-i18n="z_sampling_basis">采样口径</span> <b>系统内存</b><span data-i18n="z_normal">状态</span> <b>正常</b></div></article>
+        <article class="daily-card summary-card"><div class="panel-top"><span>DAILY OUTPUT</span><span class="daily-note" id="dailyRequests">等待后端上报今日累计</span></div><h2 data-i18n="daily">今日累计</h2><div class="summary-total-wrap"><strong class="summary-total" id="dailyTotal">—</strong><small class="summary-caption"><span data-i18n="z_daily_sum">总量</span> · TOTAL TOKENS</small></div><div class="summary-breakdown"><div class="summary-part input"><span data-i18n="z_daily_input">输入</span><strong id="dailyInput">—</strong><small>PROMPT</small></div><div class="summary-part output"><span data-i18n="z_daily_output">输出</span><strong id="dailyOutput">—</strong><small>GENERATED</small></div></div></article>
+        <article class="session-card summary-card"><div class="session-head"><div><span class="section-kicker">SESSION /</span><h2 id="tokenUsageTitle" data-i18n="z_session_usage">会话用量</h2><p id="tokenNote">当前请求或最近一次推理统计</p></div></div><div class="summary-total-wrap"><strong class="summary-total" id="totalTokens">【未加载模型】</strong><small class="summary-caption"><span data-i18n="z_total_token">合计 TOKEN</span></small></div><div class="summary-breakdown"><div class="summary-part input"><span data-i18n="z_input_token">输入 TOKEN</span><strong id="inputTokens">【未加载模型】</strong><small>PROMPT</small></div><div class="summary-part output"><span data-i18n="z_output_token">输出 TOKEN</span><strong id="outputTokens">【未加载模型】</strong><small>GENERATED</small></div></div></article>
+      </section>
+    </main>
+    <footer class="privacy-line"><span>LOCAL TELEMETRY · <b>BY WALKER 16</b></span><span>最近更新 <b id="footerClock">--:--:--</b> · NEON MATRIX</span></footer><span class="visually-hidden" id="taskStatus" aria-live="polite">等待请求</span>
+  </div>
+  <script src="i18n.js"></script><script src="daily-stats.js"></script><script src="oz.js"></script><script src="skin-switch.js"></script><script src="average-metrics.js"></script>
 </body>
 </html>

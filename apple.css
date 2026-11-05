@@ -36,3 +36,21 @@ footer{width:min(1800px,calc(100% - 64px));max-width:none;padding-inline:0}
 .model-card{min-width:0}
 .model-card h2{overflow-wrap:anywhere;word-break:break-word;line-height:1.22}
 .model-card p{white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4}
+
+/* 白天模式：以浅灰纸面替代纯白卡片，同时保留 Apple 风格的轻层级。 */
+:root{--bg:#f1f2f3;--surface:#e5e8ea;--line:#cbd0d4;--muted:#666c72}
+html{background:#e9ebed}
+body{background:linear-gradient(180deg,#f4f5f6 0,#edeff0 100%);color:var(--text)}
+.nav{background:rgba(241,242,243,.92);border-bottom-color:#d2d6d9}
+.nav button{background:#d9dde0}
+.nav button:hover{background:#cdd2d5}
+.resource-card,.model-card,.metric,.current-task,.gpu-card,.token-card,.daily-card{
+  background:linear-gradient(145deg,#e9ebed 0%,#e3e6e8 100%);
+  border-color:var(--line);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 1px 2px rgba(30,38,45,.035)
+}
+.line-meter{background:#d4d9dc}
+.memory-dot{background:conic-gradient(#9b7bdc 0deg,#d4d9dc 0deg)}
+.memory-dot:after{background:#e6e9eb}
+.welcome-side{border-left-color:#cbd0d4}
+.section-title{border-bottom-color:#cbd0d4}

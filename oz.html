@@ -2,9 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NEXUS · 绿野仙踪</title><link rel="stylesheet" href="oz.css">
+  <title>NEXUS · 绿野仙踪</title><link rel="stylesheet" href="oz.css"><link rel="stylesheet" href="fonts.css">
 </head>
-<body>
+<body class="oz-theme fixed-fit">
+  <div class="page-stage" id="pageStage">
   <div class="garden" aria-hidden="true">
     <span class="trellis left"></span><span class="trellis right"></span>
     <span class="pollen p1"></span><span class="pollen p2"></span><span class="pollen p3"></span>
@@ -13,84 +14,111 @@
   <header class="grove-nav">
     <a class="grove-mark" href="/" aria-label="返回工作台">N</a>
     <div class="brand"><strong>NEXUS</strong><span>LOCAL INFERENCE GARDEN</span></div>
-    <div class="nav-center"><span class="sprout"></span>本机链路在线 <i>·</i> <b id="clock">--:--:--</b></div>
+    <div class="nav-center"><b class="build-version" title="当前发布版本">v2.0.1</b><i>·</i><span class="sprout"></span>本机链路在线 <i>·</i> <b id="clock">--:--:--</b></div>
     <div class="nav-controls">
       <label class="skin-control">皮肤<select id="skinSelect" aria-label="切换界面皮肤"><option value="index.html">原生控制台</option><option value="cyberpunk.html">霓虹矩阵</option><option value="apple.html">极简原生</option><option value="scroll.html">云水卷轴</option><option value="oz.html">绿野仙踪</option></select></label>
       <label class="lang-control">语言<select id="langSelect" aria-label="切换语言 / Language"><option value="zh">简体中文</option><option value="en">English</option></select></label>
       <label>后端<select id="backendSelect"><option value="auto">自动</option></select></label>
-      <label>刷新<input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="intervalValue">1.2s</output></label>
+      <label class="refresh-control">刷新<input id="intervalSlider" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="intervalValue">1.2s</output></label>
       <button id="refreshBtn" title="刷新">↻</button>
     </div>
   </header>
 
-  <main>
+  <main class="dashboard">
     <section class="hero">
       <div class="hero-copy">
         <span class="kicker">本机资源 · 花园控制层</span>
-        <h1>算力成荫，<em>日日常青</em></h1>
+        <h1>算力成荫， <em>日日常青</em></h1>
         <p id="dataSource">GPU：等待采样 · 主机：等待采样 · 推理后端：等待检测</p>
       </div>
       <div class="power-stamp">
-        <span>总功耗</span><strong id="totalPower">—</strong><b>W</b><small id="powerSummary">NVIDIA 全卡合计</small>
+        <div><span>总功耗</span><strong id="totalPower">—</strong><b>W</b><small id="powerSummary">GPU 全卡合计</small></div>
         <div class="bloom-seal" aria-hidden="true"><i></i></div>
       </div>
     </section>
 
-    <section class="section-head daily-head"><div><span class="kicker">01 · DAILY HARVEST</span><h2>今日累计</h2></div><span class="section-note" id="dailyRequests">等待后端上报今日累计</span></section>
-    <section class="token-grid">
-      <article class="card token-stat"><span>今日输入量</span><strong id="dailyInput">—</strong><small>PROMPT TOKENS</small></article>
-      <article class="card token-stat"><span>今日输出量</span><strong id="dailyOutput">—</strong><small>GENERATED TOKENS</small></article>
-      <article class="card token-stat total"><span>今日总量</span><strong id="dailyTotal">—</strong><small>INPUT + OUTPUT</small></article>
-    </section>
-
-    <section class="host-grid">
+    <section class="summary-grid">
       <article class="card cpu-panel">
         <div class="panel-head"><span>HOST / CPU</span><b id="cpuPct">—</b></div>
         <div class="cpu-title"><span class="leaf-chip">C</span><div><h2 id="cpuModel">本机处理器</h2><p id="cpuSub">PROCESSOR TELEMETRY</p></div></div>
-        <div class="big-row"><strong id="cpuLoadBig">—</strong><span>总使用率</span><strong id="cpuClock">—</strong><span>主频 MHz</span></div>
+        <div class="big-row"><strong id="cpuLoadBig">—</strong><span>总使用率</span><strong id="cpuClock">—</strong><span>MHz</span><strong class="temp-read" id="cpuTemp">—°C</strong><span id="cpuTempLabel">CPU 温度</span></div>
         <div class="meter"><i id="cpuBar"></i></div>
-        <div class="spec-row"><span>物理核心 <b id="cpuCores">—</b></span><span>逻辑线程 <b id="cpuThreads">—</b></span><span>采样口径 <b>任务管理器</b></span></div>
+        <div class="spec-row"><span>物理核心 <b id="cpuCores">—</b></span><span>逻辑线程 <b id="cpuThreads">—</b></span><span>温度来源 <b id="cpuTempSource">—</b></span></div>
       </article>
+
       <article class="card memory-panel">
         <div class="panel-head"><span>HOST / MEMORY</span><b id="ramPct">—</b></div>
         <div class="cpu-title"><span class="leaf-chip blossom">R</span><div><h2 id="ramTitle">— GB</h2><p id="ramSub">内存总量 · 容量与占用</p></div></div>
-        <div class="big-row"><strong id="ramUsed">—</strong><span>已占用</span></div>
+        <div class="big-row"><strong id="ramUsed">—</strong><span>已占用</span><strong class="temp-read ram-available" id="ramAvailable">—</strong><span>可用</span></div>
         <div class="meter blossom-meter"><i id="ramBar"></i></div>
-        <div class="spec-row"><span>可用 <b id="ramAvailable">—</b></span><span>状态 <b>正常</b></span></div>
+        <div class="spec-row"><span>采样口径 <b>系统内存</b></span><span>状态 <b>正常</b></span></div>
+      </article>
+
+      <article class="card daily-panel">
+        <div class="panel-head"><span>DAILY HARVEST</span><b id="dailyRequests">等待后端上报今日累计</b></div>
+        <h2 class="daily-title">今日累计</h2>
+        <div class="daily-total-wrap"><strong class="daily-total" id="dailyTotal">—</strong><small>总量 · TOTAL TOKENS</small></div>
+        <div class="daily-parts">
+          <div><span>输入</span><strong id="dailyInput">—</strong><small>PROMPT</small></div>
+          <div><span>输出</span><strong id="dailyOutput">—</strong><small>GENERATED</small></div>
+        </div>
       </article>
     </section>
 
-    <section class="section-head"><div><span class="kicker">02 · ACCELERATOR GROVE</span><h2>显卡阵列</h2></div><span class="array-status"><i></i><b id="gpuCount">0 / 0</b> ONLINE</span></section>
-    <section class="gpu-grid" id="gpuGrid"></section>
-
-    <section class="section-head inference-head"><div><span class="kicker">03 · INFERENCE CORE</span><h2>推理信息</h2></div><span class="backend-label" id="backendName">等待后端</span></section>
-    <section class="inference-grid">
-      <article class="card model-panel">
-        <div class="panel-head"><span>当前推理实例</span><b id="modelStatus">未加载模型</b></div>
-        <h2 id="modelName">【未加载模型】</h2>
-        <p id="modelMeta">等待本机后端上报模型参数</p>
-        <div class="spec-row"><span>架构 <b id="modelArch">—</b></span><span>量化 <b id="modelQuant">—</b></span><span>上下文 <b id="modelContext">—</b></span></div>
-      </article>
-      <article class="card metric-panel"><span>生成速度</span><strong id="genSpeed">—</strong><small>tok/s · <b id="genWindow">等待指标</b></small></article>
-      <article class="card metric-panel"><span>预填充速度</span><strong id="promptSpeed">—</strong><small>tok/s · <b id="promptWindow">等待指标</b></small></article>
-      <article class="card metric-panel"><span>上下文占用</span><strong id="contextUsed">—</strong><small id="contextTotal"></small><div class="meter"><i id="contextBar"></i></div><small id="contextFoot">等待推理请求</small></article>
+    <section class="section-block gpu-section">
+      <div class="section-head"><div><span class="kicker">02 · ACCELERATOR GROVE</span><h2>显卡阵列</h2></div><span class="array-status"><i></i><b id="gpuCount">0 / 0</b> ONLINE</span></div>
+      <section class="gpu-grid" id="gpuGrid"></section>
     </section>
 
-    <section class="task-panel">
-      <div><span class="kicker">ACTIVE JOB</span><h2 id="taskTitle">【未加载模型】</h2></div>
-      <div class="task-state"><b id="taskStatus">未加载模型</b><span id="taskProgress">—</span></div>
-      <span class="task-id" id="taskId">IDLE</span>
+    <section class="section-block inference-section">
+      <div class="section-head"><div><span class="kicker">01 · INFERENCE CORE</span><h2>推理信息</h2></div><span class="backend-label" id="backendName">等待后端</span></div>
+      <section class="inference-grid">
+        <article class="card model-panel">
+          <div class="panel-head"><span>当前推理实例</span><b id="modelStatus">未加载模型</b></div>
+          <h2 id="modelName">【未加载模型】</h2>
+          <p id="modelMeta">等待本机后端上报模型参数</p>
+          <div class="spec-row model-spec-row">
+            <span>架构 <b id="modelArch">—</b></span><span>量化 <b id="modelQuant">—</b></span>
+            <span>推理引擎 <b id="modelEngine">—</b></span><span>上下文 <b id="modelContext">—</b></span>
+            <span class="expert-spec">专家数 <b id="modelExperts">—</b><small id="modelExpertsHint">—</small></span>
+          </div>
+        </article>
+        <article class="card metric-panel"><span>生成速度</span><strong id="genSpeed">—</strong><small>tok/s · <b id="genWindow">等待指标</b></small>
+          <div class="metric-chart" aria-label="生成速度近期采样折线图"><svg id="genSpark" viewBox="0 0 160 34" role="img" preserveAspectRatio="none"><path class="spark-grid" d="M0 29H160"/><path class="spark-area" id="genSparkArea" d=""/><path class="spark-line" id="genSparkLine" d=""/><circle class="spark-dot" id="genSparkDot" cx="0" cy="17" r="2.2"/></svg></div>
+        </article>
+        <article class="card metric-panel prompt-metric"><span>预填充速度</span><strong id="promptSpeed">—</strong><small>tok/s · <b id="promptWindow">等待指标</b></small>
+          <div class="metric-chart" aria-label="预填充速度近期采样折线图"><svg id="promptSpark" viewBox="0 0 160 34" role="img" preserveAspectRatio="none"><path class="spark-grid" d="M0 29H160"/><path class="spark-area" id="promptSparkArea" d=""/><path class="spark-line" id="promptSparkLine" d=""/><circle class="spark-dot" id="promptSparkDot" cx="0" cy="17" r="2.2"/></svg></div>
+        </article>
+        <article class="card context-panel">
+          <div class="panel-head"><span>上下文占用</span><b id="contextFoot">等待推理请求</b></div>
+          <div class="context-number"><strong id="contextUsed">—</strong><span id="contextTotal"></span><small id="taskProgress">—</small></div>
+          <div class="meter"><i id="contextBar"></i></div>
+          <div class="activity-card">
+            <span class="activity-orbit" aria-hidden="true"><i></i></span>
+            <div class="activity-copy"><b id="activityLabel">等待请求</b><p id="activityDetail">推理槽位空闲</p></div>
+            <span class="task-id" id="taskId">IDLE</span>
+          </div>
+          <p class="task-title" id="taskTitle">当前没有活动推理请求</p>
+        </article>
+      </section>
     </section>
 
-    <section class="section-head token-head"><div><span class="kicker">04 · SESSION GROWTH</span><h2 id="tokenUsageTitle">会话用量</h2></div><span class="section-note" id="tokenNote">当前请求或最近一次推理统计</span></section>
-    <section class="token-grid">
-      <article class="card token-stat"><span>输入 TOKEN</span><strong id="inputTokens">【未加载模型】</strong><small>PROMPT / PREFILL</small></article>
-      <article class="card token-stat"><span>输出 TOKEN</span><strong id="outputTokens">【未加载模型】</strong><small>COMPLETION / DECODE</small></article>
-      <article class="card token-stat total"><span>合计 TOKEN</span><strong id="totalTokens">【未加载模型】</strong><small>INPUT + OUTPUT</small></article>
+    <section class="session-strip">
+      <div class="session-head"><span class="kicker">01B · SESSION USAGE</span><div><h2 id="tokenUsageTitle">会话用量</h2><p id="tokenNote">当前请求或最近一次推理统计</p></div></div>
+      <div class="session-summary">
+        <div class="session-summary-total"><span>合计 TOKEN</span><strong id="totalTokens">【未加载模型】</strong></div>
+        <div class="session-summary-parts">
+          <div><span>输入 TOKEN</span><strong id="inputTokens">【未加载模型】</strong></div>
+          <div><span>输出 TOKEN</span><strong id="outputTokens">【未加载模型】</strong></div>
+        </div>
+      </div>
+      <div class="session-foot"><span>数据仅在本机处理 · NEXUS GARDEN LAYER</span><small>最近更新 <b id="footerClock">--:--:--</b></small></div>
     </section>
   </main>
 
-  <footer><span>数据仅在本机处理 · NEXUS GARDEN LAYER</span><span>最近更新 <b id="footerClock">--:--:--</b></span></footer>
+  <footer class="privacy-line"><span>LOCAL TELEMETRY · BY WALKER 16</span><span>绿野仙踪 / COMPACT EDITION</span></footer>
+  <span class="visually-hidden" id="taskStatus" aria-live="polite">等待请求</span>
+  </div>
   <script src="i18n.js"></script><script src="daily-stats.js"></script><script src="oz.js"></script>
   <script src="skin-switch.js"></script><script src="average-metrics.js"></script>
 </body>

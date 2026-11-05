@@ -5,8 +5,16 @@ const os = require('os');
 const { execFile } = require('child_process');
 
 const PORT = Number(process.env.PORT || 4173);
+const HOST = process.env.HOST || '127.0.0.1';
+const STRATA_API_KEY = process.env.STRATA_API_KEY || '';
+const strataHeaders = STRATA_API_KEY ? { Authorization: `Bearer ${STRATA_API_KEY}` } : {};
 const ROOT = __dirname;
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.ttf': 'font/ttf', '.otf': 'font/otf',
+};
 const previousMetrics = new Map();
 const previousLlamaSlots = new Map();
 let lastLlamaProbeAt = null;
@@ -138,6 +146,8 @@ let lmStudioProbeCache = null;
 let lmStudioProbeInFlight = null;
 let hostCache = null;
 let hostInFlight = null;
+let cpuTemperatureCache = null;
+let cpuTemperatureInFlight = null;
 
 function exec(command, args, timeout = 1200) {
   return new Promise((resolve) => execFile(command, args, { windowsHide: true, timeout }, (error, stdout) => resolve(error ? '' : stdout.trim())));
@@ -430,7 +440,79 @@ async function readTypeperf() {
   return { cpuPercent: Number.isFinite(values[0]) ? values[0] : null, diskActive: Number.isFinite(values[1]) ? values[1] : null, diskRead: Number.isFinite(values[2]) ? values[2] : null, diskWrite: Number.isFinite(values[3]) ? values[3] : null };
 }
 
+let previousUnixCpu = null;
+let previousUnixDisk = null;
+
+function readUnixPerformance() {
+  const cpus = os.cpus();
+  const totals = cpus.reduce((acc, cpu) => {
+    for (const [key, value] of Object.entries(cpu.times)) acc[key] = (acc[key] || 0) + value;
+    return acc;
+  }, {});
+  const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
+  const idle = (totals.idle || 0) + (totals.iowait || 0);
+  const now = Date.now();
+  let cpuPercent = null;
+  if (previousUnixCpu) {
+    const totalDelta = total - previousUnixCpu.total;
+    const idleDelta = idle - previousUnixCpu.idle;
+    if (totalDelta > 0) cpuPercent = Math.max(0, Math.min(100, (1 - idleDelta / totalDelta) * 100));
+  }
+  previousUnixCpu = { total, idle, at: now };
+
+  let disk = { activePercent: null, readBytesPerSec: null, writeBytesPerSec: null };
+  try {
+    let sectorsRead = 0, sectorsWritten = 0, ioMillis = 0;
+    for (const line of fs.readFileSync('/proc/diskstats', 'utf8').split('\n')) {
+      const fields = line.trim().split(/\s+/);
+      if (fields.length < 14) continue;
+      const name = fields[2];
+      if (!/^(nvme\d+n\d+|sd[a-z]+|vd[a-z]+|xvd[a-z]+)$/.test(name)) continue;
+      sectorsRead += Number(fields[5]) || 0;
+      sectorsWritten += Number(fields[9]) || 0;
+      ioMillis += Number(fields[12]) || 0;
+    }
+    if (previousUnixDisk) {
+      const elapsed = Math.max(0.1, (now - previousUnixDisk.at) / 1000);
+      disk = {
+        activePercent: Math.max(0, Math.min(100, ((ioMillis - previousUnixDisk.ioMillis) / (elapsed * 1000)) * 100)),
+        readBytesPerSec: Math.max(0, (sectorsRead - previousUnixDisk.sectorsRead) * 512 / elapsed),
+        writeBytesPerSec: Math.max(0, (sectorsWritten - previousUnixDisk.sectorsWritten) * 512 / elapsed),
+      };
+    }
+    previousUnixDisk = { sectorsRead, sectorsWritten, ioMillis, at: now };
+  } catch (_) {}
+  return { cpuPercent, diskActive: disk.activePercent, diskRead: disk.readBytesPerSec, diskWrite: disk.writeBytesPerSec };
+}
+
+async function readProcessUnix() {
+  const pattern = /strata|maya|llama|lm[-_ ]?studio|lmstudio|ollama|vllm|sglang|comfy|koboldcpp|text-generation/i;
+  const output = await exec('ps', ['-eo', 'pid=,pcpu=,rss=,comm=,args='], 2500);
+  if (!output) return null;
+  let best = null;
+  for (const line of output.split('\n')) {
+    const match = line.trim().match(/^(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.*)$/);
+    if (!match) continue;
+    const [, pid, cpuPercent, rssKb, comm, args] = match;
+    if (!pattern.test(comm) && !pattern.test(args)) continue;
+    const memoryBytes = Number(rssKb) * 1024;
+    if (!Number.isFinite(memoryBytes) || memoryBytes <= 0) continue;
+    if (!best || memoryBytes > best.memoryBytes) {
+      best = {
+        name: String(comm).replace(/\.exe$/, ''),
+        exe: String(comm),
+        pid: Number(pid),
+        memoryBytes,
+        cpuPercent: Number.isFinite(Number(cpuPercent)) ? Number(cpuPercent) : null,
+        command: String(args).trim().slice(0, 140),
+      };
+    }
+  }
+  return best ? { ...best, status: 'active' } : null;
+}
+
 async function readProcess() {
+  if (process.platform !== 'win32') return readProcessUnix();
   const script = '$p=Get-Process | Where-Object { $_.ProcessName -match "llama|lmstudio|lm-studio|ollama" } | ForEach-Object { $cpu=0; try { if ($null -ne $_.CPU) { $cpu=[double]$_.CPU } } catch {}; [pscustomobject]@{name=$_.ProcessName; pid=$_.Id; memoryBytes=[int64]$_.WorkingSet64; cpuSeconds=$cpu} } | Sort-Object cpuSeconds -Descending | Select-Object -First 1; if ($null -eq $p) { "{}" } else { $p | ConvertTo-Json -Compress }';
   const output = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], 1800);
   if (!output) return null;
@@ -448,11 +530,89 @@ async function readProcess() {
   } catch (_) { return null; }
 }
 
+function readLinuxCpuTemperature() {
+  try {
+    const base = '/sys/class/thermal';
+    const readings = fs.readdirSync(base)
+      .filter((name) => name.startsWith('thermal_zone'))
+      .map((name) => {
+        try {
+          const type = fs.readFileSync(path.join(base, name, 'type'), 'utf8').trim();
+          const raw = Number(fs.readFileSync(path.join(base, name, 'temp'), 'utf8').trim());
+          return { type, value: Number.isFinite(raw) ? raw / 1000 : null };
+        } catch (_) { return null; }
+      })
+      .filter((item) => item && Number.isFinite(item.value) && item.value > 0);
+    if (!readings.length) return null;
+    const preferred = readings.filter((item) => /x86_pkg_temp|coretemp|cpu|package/i.test(item.type));
+    const best = (preferred.length ? preferred : readings).sort((a, b) => b.value - a.value)[0];
+    return best ? { value: Math.round(best.value * 10) / 10, source: best.type || 'Linux thermal zone' } : null;
+  } catch (_) { return null; }
+}
+
+// Windows 没有统一的 CPU 温度接口。优先读 LibreHardwareMonitor / OpenHardwareMonitor 的 WMI 传感器；
+// 没装监控软件时再退回 ACPI 热区。两者都读不到就返回 null，界面会明确显示“不可用”。
+async function readCpuTemperature() {
+  if (process.platform !== 'win32') return readLinuxCpuTemperature();
+  if (cpuTemperatureCache && Date.now() - cpuTemperatureCache.at < 5000) return cpuTemperatureCache.value;
+  if (cpuTemperatureInFlight) return cpuTemperatureInFlight;
+  const script = String.raw`
+$ErrorActionPreference = 'SilentlyContinue'
+$value = $null
+$source = $null
+foreach ($ns in @('root/LibreHardwareMonitor', 'root/OpenHardwareMonitor')) {
+  if ($null -ne $value) { break }
+  try {
+    $sensor = Get-CimInstance -Namespace $ns -ClassName Sensor -ErrorAction Stop |
+      Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -gt 0 -and $_.Name -match '(CPU|Package|Core|Tctl|Tdie|CCD)' } |
+      Sort-Object Value -Descending | Select-Object -First 1
+    if ($sensor) {
+      $value = [double]$sensor.Value
+      $source = if ($ns -match 'Libre') { 'LibreHardwareMonitor' } else { 'OpenHardwareMonitor' }
+    }
+  } catch {}
+}
+if ($null -eq $value) {
+  try {
+    $sample = Get-Counter '\Thermal Zone Information(*)\Temperature' -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop |
+      Select-Object -ExpandProperty CounterSamples |
+      Where-Object { $_.CookedValue -gt 20 } |
+      Sort-Object CookedValue -Descending | Select-Object -First 1
+    if ($sample) {
+      $raw = [double]$sample.CookedValue
+      if ($raw -gt 1000) { $value = ($raw / 10) - 273.15 }
+      elseif ($raw -gt 200) { $value = $raw - 273.15 }
+      else { $value = $raw }
+      $source = 'ACPI thermal zone'
+    }
+  } catch {}
+}
+if ($null -ne $value -and $value -gt 0) {
+  [pscustomobject]@{ value = [math]::Round($value, 1); source = $source } | ConvertTo-Json -Compress
+}
+`;
+  cpuTemperatureInFlight = (async () => {
+    const output = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], 2600);
+    let value = null;
+    try {
+      const parsed = JSON.parse(output);
+      if (Number.isFinite(Number(parsed?.value)) && Number(parsed.value) > 0) value = { value: Number(parsed.value), source: parsed.source || 'ACPI thermal zone' };
+    } catch (_) {}
+    cpuTemperatureCache = { at: Date.now(), value };
+    return value;
+  })().finally(() => { cpuTemperatureInFlight = null; });
+  return cpuTemperatureInFlight;
+}
+
 async function readHost() {
   if (hostInFlight) return hostInFlight;
   if (hostCache && Date.now() - hostCache.timestamp < 900) return hostCache;
   hostInFlight = (async () => {
-    const [perf, process] = await Promise.all([readTypeperf(), readProcess()]);
+    const [perf, hostProcess, cpuTemperature] = await Promise.all([
+      process.platform === 'win32' ? readTypeperf() : Promise.resolve(readUnixPerformance()),
+      readProcess(),
+      readCpuTemperature(),
+    ]);
     const total = os.totalmem();
     const free = os.freemem();
     hostCache = {
@@ -460,10 +620,12 @@ async function readHost() {
       cpuPercent: perf.cpuPercent,
       cpuModel: os.cpus()[0]?.model || null,
       cpuSpeedMHz: Number(os.cpus()[0]?.speed) || null,
+      cpuTemperature,
       logicalProcessors: os.cpus().length,
       memory: { used: total - free, total },
       disk: { activePercent: perf.diskActive, readBytesPerSec: perf.diskRead, writeBytesPerSec: perf.diskWrite },
-      process,
+      process: hostProcess,
+      source: process.platform === 'win32' ? 'typeperf' : 'procfs',
     };
     return hostCache;
   })().finally(() => { hostInFlight = null; });
@@ -509,7 +671,9 @@ async function probeTarget(target) {
     const models = Array.isArray(data.data) ? data.data.filter((item) => item && item.id) : [];
     const model = models[0];
     const loaded = models.length > 0;
-    // llama.cpp 与 Strata 都是 OpenAI 兼容、默认端口也一样，靠 /v1/status 才能分辨。
+    // llama.cpp、Strata 与 Maya 都是 OpenAI 兼容、默认端口也一样，靠 /v1/status 才能分辨。
+    const mayaStatus = await readMayaStatus(target.url);
+    if (mayaStatus) return await probeMaya(target, mayaStatus, model?.id || null);
     const strataStatus = await readStrataStatus(target.url);
     if (strataStatus) return await probeStrata(target, strataStatus, model?.id || null);
     let metrics = null;
@@ -569,11 +733,125 @@ async function probeTarget(target) {
 // Strata 的自述接口：/v1/status 给出模型、上下文窗口、并发与上一次请求的计时（llama.cpp 命名）。
 async function readStrataStatus(base) {
   try {
-    const response = await fetch(`${base}/v1/status`, { signal: AbortSignal.timeout(700) });
+    const response = await fetch(`${base}/v1/status`, { headers: strataHeaders, signal: AbortSignal.timeout(700) });
     if (!response.ok) return null;
     const data = await response.json();
     return data && data.service === 'strata' ? data : null;
   } catch (_) { return null; }
+}
+
+// Maya 的自述接口：/v1/status 与 Strata 类似，但 service 为 "maya"。
+async function readMayaStatus(base) {
+  try {
+    const response = await fetch(`${base}/v1/status`, { headers: strataHeaders, signal: AbortSignal.timeout(700) });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data && data.service === 'maya' ? data : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Maya 的 /metrics 是 JSON：live 是本请求的实时进度，last_timings 保留最近一次完成结果。
+async function probeMaya(target, known = null, modelId = null) {
+  const status = known || await readMayaStatus(target.url);
+  if (!status) return null;
+  let payload = null;
+  try {
+    const response = await fetch(`${target.url}/metrics`, { headers: strataHeaders, signal: AbortSignal.timeout(900) });
+    if (response.ok) payload = await response.json();
+  } catch (_) {}
+
+  const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  const live = payload?.live || null;
+  const engine = payload?.engine || {};
+  const totals = payload?.totals || null;
+  const timings = status.last_timings || null;
+  const state = typeof live?.state === 'string' ? live.state : null;
+  const busy = state === 'generating' || state === 'reading' || state === 'prefill' || state === 'prefilling';
+
+  // Maya 的 last_timings.prompt_n 只算本次新增读取的 token；缓存复用数在 cache_n。
+  // 上下文占用要显示完整 prompt，所以空闲时两者相加。
+  const promptTokens = busy
+    ? number(live?.prompt_tokens)
+    : (number(timings?.prompt_n) !== null && number(timings?.cache_n) !== null
+      ? number(timings.prompt_n) + number(timings.cache_n)
+      : number(timings?.prompt_n));
+  const predictedTokens = busy ? number(live?.generated) : number(timings?.predicted_n);
+  const generationSpeed = (state === 'generating' ? number(live?.tok_s) : null) ?? number(timings?.predicted_per_second);
+  const promptSpeed = (busy ? number(live?.prefill_tok_s_mean) : null) ?? number(timings?.prompt_per_second);
+  const used = promptTokens !== null && predictedTokens !== null ? promptTokens + predictedTokens : null;
+  const total = number(status.cache_max_tokens) ?? number(engine.max_context) ?? null;
+
+  if (totals) {
+    const fullPrompt = number(totals.prompt_tokens);
+    const reusedPrompt = number(totals.reused);
+    // 今日输入量对齐本机实际计算：缓存复用不计入新增 prompt。
+    const freshPrompt = fullPrompt !== null && reusedPrompt !== null
+      ? Math.max(0, fullPrompt - reusedPrompt)
+      : fullPrompt;
+    syncDailyCounters(
+      'maya',
+      freshPrompt,
+      number(totals.output_tokens),
+      number(totals.requests),
+      number(totals.since),
+    );
+  }
+  const modelLabel = engine.model_label || status.model_label || null;
+  const labelParts = typeof modelLabel === 'string' ? modelLabel.split(' · ') : [];
+  const architecture = labelParts.length ? labelParts[0] : 'DeepSeek V4.1';
+  const quantization = labelParts.length > 1 ? labelParts[labelParts.length - 1] : null;
+  const version = status.version || engine.maya_version || null;
+  const queued = number(live?.queued) ?? number(status.activity?.queue?.waiting) ?? 0;
+  const promptRead = number(live?.prompt_read);
+  const promptTotal = number(live?.prompt_total);
+  const activity = state === 'reading' || state === 'prefill' || state === 'prefilling'
+    ? { state: 'prefilling', label: '读取提示词', detail: promptRead != null && promptTotal != null ? `预填充 ${Math.round(promptRead).toLocaleString('en-US')} / ${Math.round(promptTotal).toLocaleString('en-US')} tokens` : (live?.phase || '正在处理提示词') }
+    : state === 'generating'
+      ? { state: 'generating', label: '生成中', detail: number(live?.generated) != null ? `已生成 ${Math.round(number(live.generated)).toLocaleString('en-US')} tokens` : '正在输出 token' }
+      : state === 'unloaded'
+        ? { state: 'unloaded', label: '模型未加载', detail: '等待模型载入' }
+        : queued > 0
+          ? { state: 'queued', label: '排队中', detail: `${queued} 个请求等待推理槽位` }
+          : { state: 'waiting', label: '等待请求', detail: '推理槽位空闲' };
+
+  return {
+    connected: true,
+    loaded: Boolean(status.model) && status.unloaded !== true,
+    backend: 'Maya',
+    url: target.url,
+    model: status.model || modelId || engine.model || null,
+    key: 'maya',
+    metrics: { promptSpeed, generationSpeed, promptTokens, predictedTokens },
+    slots: {
+      active: busy,
+      used,
+      total,
+      promptTokens,
+      predictedTokens,
+      task: busy ? `Maya · ${state === 'reading' ? '读取提示词' : '生成中'}` : null,
+      parallel: number(status.concurrency?.serving),
+      queued,
+      activeRequests: number(live?.active),
+      activity,
+    },
+    details: {
+      displayName: modelLabel || status.model || engine.model || null,
+      architecture,
+      quantization,
+      parameters: null,
+      format: 'GGUF',
+      backend: 'Maya',
+      backendVersion: version ? `Maya ${version}` : 'Maya',
+      contextLength: total,
+      parallel: number(status.concurrency?.serving),
+      expertSlots: number(engine.expert_slots),
+      kvType: typeof engine.kv === 'string' ? engine.kv : null,
+      vision: status.vision?.enabled === true,
+    },
+    daily: dailyTokensPayload('Maya 累计 · 新增 prompt（不含缓存复用）'),
+  };
 }
 
 // Strata 后端：/metrics 是 JSON（不是 llama.cpp 的 Prometheus 文本），实时速度、累计总量和硬件都在里面。
@@ -582,7 +860,7 @@ async function probeStrata(target, known = null, modelId = null) {
   if (!status) return null;
   let payload = null;
   try {
-    const response = await fetch(`${target.url}/metrics`, { signal: AbortSignal.timeout(900) });
+    const response = await fetch(`${target.url}/metrics`, { headers: strataHeaders, signal: AbortSignal.timeout(900) });
     if (response.ok) payload = await response.json();
   } catch (_) {}
   const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
@@ -591,7 +869,7 @@ async function probeStrata(target, known = null, modelId = null) {
   const totals = payload?.totals || null;
   const timings = status.last_timings || null;
   const state = typeof live?.state === 'string' ? live.state : null;
-  const busy = state === 'generating' || state === 'reading';
+  const busy = state === 'generating' || state === 'reading' || state === 'prefill' || state === 'prefilling';
   // 空闲时用 /metrics 里最近一次完成的请求，让卡片保留“最近一次推理”的读数。
   const recent = Array.isArray(payload?.requests) && payload.requests.length ? payload.requests[0] : null;
   const promptTokens = busy ? number(live?.prompt_tokens) : number(recent?.prompt_tokens);
@@ -601,8 +879,19 @@ async function probeStrata(target, known = null, modelId = null) {
   const used = promptTokens !== null && predictedTokens !== null ? promptTokens + predictedTokens : null;
   const total = number(engine.max_context) ?? number(status.cache_max_tokens) ?? null;
   if (totals) syncDailyCounters('strata', number(totals.prompt_tokens), number(totals.output_tokens), number(totals.requests), number(totals.since));
-  noteBackendActivity('strata', busy);
   const version = engine.version || status.engine || null;
+  const queued = number(live?.queued) ?? number(status.activity?.queue?.waiting) ?? 0;
+  const promptRead = number(live?.prompt_read);
+  const promptTotal = number(live?.prompt_total);
+  const activity = state === 'reading' || state === 'prefill' || state === 'prefilling'
+    ? { state: 'prefilling', label: '读取提示词', detail: promptRead != null && promptTotal != null ? `预填充 ${Math.round(promptRead).toLocaleString('en-US')} / ${Math.round(promptTotal).toLocaleString('en-US')} tokens` : (live?.phase || '正在处理提示词') }
+    : state === 'generating'
+      ? { state: 'generating', label: '生成中', detail: number(live?.generated) != null ? `已生成 ${Math.round(number(live.generated)).toLocaleString('en-US')} tokens` : '正在输出 token' }
+      : state === 'unloaded'
+        ? { state: 'unloaded', label: '模型未加载', detail: '等待模型载入' }
+        : queued > 0
+          ? { state: 'queued', label: '排队中', detail: `${queued} 个请求等待推理槽位` }
+          : { state: 'waiting', label: '等待请求', detail: '推理槽位空闲' };
   return {
     connected: true,
     loaded: Boolean(status.loaded) || Boolean(modelId),
@@ -619,6 +908,9 @@ async function probeStrata(target, known = null, modelId = null) {
       predictedTokens,
       task: busy ? `当前推理请求 · ${state === 'reading' ? '读取提示词' : '生成中'}` : null,
       parallel: number(status.concurrency?.serving),
+      queued,
+      activeRequests: number(live?.active),
+      activity,
     },
     details: {
       displayName: status.model || engine.model || null,
@@ -662,7 +954,17 @@ async function probeLmStudio(target) {
       url: target.url,
       model: instance.id || loadedModel.key || loadedModel.display_name,
       metrics: liveStats ? { promptSpeed: liveStats.promptSpeed, generationSpeed: liveStats.generationSpeed, promptTokens: liveStats.promptTokens, predictedTokens: liveStats.predictedTokens } : null,
-      slots: { active: Boolean(liveStats?.active), used: Number.isFinite(liveStats?.tokenCount) ? liveStats.tokenCount : null, total: Number(config.context_length || loadedModel.max_context_length) || null, promptTokens: liveStats?.promptTokens ?? null, predictedTokens: liveStats?.predictedTokens ?? null, task: liveStats?.active ? (liveStats.lastUserText || liveStats.conversationName || `当前推理请求 · task ${liveStats.taskId || '—'}`) : null },
+      slots: {
+        active: Boolean(liveStats?.active),
+        used: Number.isFinite(liveStats?.tokenCount) ? liveStats.tokenCount : null,
+        total: Number(config.context_length || loadedModel.max_context_length) || null,
+        promptTokens: liveStats?.promptTokens ?? null,
+        predictedTokens: liveStats?.predictedTokens ?? null,
+        task: liveStats?.active ? (liveStats.lastUserText || liveStats.conversationName || `当前推理请求 · task ${liveStats.taskId || '—'}`) : null,
+        activity: liveStats?.active
+          ? { state: 'generating', label: '生成中', detail: '正在输出 token' }
+          : { state: 'waiting', label: '等待请求', detail: '推理槽位空闲' },
+      },
       details: {
         displayName: loadedModel.display_name || loadedModel.key,
         architecture: loadedModel.architecture || null,
@@ -695,7 +997,24 @@ function parseSlots(payload) {
   const promptTokens = number(active.n_prompt_tokens, active.n_prompt_tokens_processed, active.prompt_tokens);
   const predictedTokens = number(active.n_tokens_predicted, active.tokens_predicted, active.n_generated_tokens, decoded);
   const activeTask = active.state === 1 || active.state === 'processing' || active.is_processing;
-  return { active: Boolean(activeTask), used: used == null ? null : Number(used), total: total == null ? null : Number(total), promptTokens: promptTokens == null ? null : Number(promptTokens), predictedTokens: predictedTokens == null ? null : Number(predictedTokens), decodedTokens: decoded == null ? null : Number(decoded), task: activeTask ? `当前推理请求 · task ${active.id_task ?? '—'}` : null };
+  const processed = number(active.n_prompt_tokens_processed, active.prompt_tokens_processed);
+  const phase = activeTask ? (Number(decoded) > 0 ? 'generating' : 'prefilling') : 'waiting';
+  const label = phase === 'generating' ? '生成中' : phase === 'prefilling' ? '读取提示词' : '等待请求';
+  const detail = phase === 'prefilling' && promptTokens != null && processed != null
+    ? `预填充 ${Math.round(Number(processed)).toLocaleString('en-US')} / ${Math.round(Number(promptTokens)).toLocaleString('en-US')} tokens`
+    : phase === 'generating' && decoded != null
+      ? `已生成 ${Math.round(Number(decoded)).toLocaleString('en-US')} tokens`
+      : activeTask ? '模型正在处理请求' : '推理槽位空闲';
+  return {
+    active: Boolean(activeTask),
+    used: used == null ? null : Number(used),
+    total: total == null ? null : Number(total),
+    promptTokens: promptTokens == null ? null : Number(promptTokens),
+    predictedTokens: predictedTokens == null ? null : Number(predictedTokens),
+    decodedTokens: decoded == null ? null : Number(decoded),
+    task: activeTask ? `当前推理请求 · task ${active.id_task ?? '—'}` : null,
+    activity: { state: phase, label, detail },
+  };
 }
 
 function deriveLlamaMetrics(payload, modelId = null) {
@@ -813,4 +1132,4 @@ const server = http.createServer(async (req, res) => {
   if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { send(res, 404, 'text/plain; charset=utf-8', 'Not found'); return; }
   send(res, 200, MIME[path.extname(file)] || 'application/octet-stream', fs.readFileSync(file));
 });
-server.listen(PORT, '127.0.0.1', () => console.log(`Local AI Workbench running at http://127.0.0.1:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`Local AI Workbench running at http://${HOST}:${PORT}`));

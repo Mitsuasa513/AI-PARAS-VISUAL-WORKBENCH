@@ -1,0 +1,46 @@
+/* Locally bundled, OFL-licensed display numerals. See assets/fonts/THIRD_PARTY_NOTICES.md. */
+@font-face{font-family:'Nexus Han Sans';font-style:normal;font-display:swap;font-weight:250 900;src:url('assets/fonts/NexusHanSans-Subset.woff2') format('woff2')}
+@font-face{font-family:'Nexus Han Serif';font-style:normal;font-display:swap;font-weight:250 900;src:url('assets/fonts/NexusHanSerif-Subset.woff2') format('woff2')}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-display:swap;font-weight:400;src:url('assets/fonts/SpaceGrotesk-Regular.woff2') format('woff2')}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-display:swap;font-weight:500;src:url('assets/fonts/SpaceGrotesk-Medium.woff2') format('woff2')}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-display:swap;font-weight:600;src:url('assets/fonts/SpaceGrotesk-SemiBold.woff2') format('woff2')}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-display:swap;font-weight:700;src:url('assets/fonts/SpaceGrotesk-Bold.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:400;src:url('assets/fonts/JetBrainsMono-Regular.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:500;src:url('assets/fonts/JetBrainsMono-Medium.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:700;src:url('assets/fonts/JetBrainsMono-Bold.woff2') format('woff2')}
+
+:root{--numeric-display:'Space Grotesk','DM Mono','Cascadia Mono','SFMono-Regular',Consolas,monospace}
+
+body.oz-theme{
+  --sans:'Nexus Han Sans','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+  --serif:'Nexus Han Serif','Songti SC','STSong','SimSun',serif;
+  --mono:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
+  font-family:var(--sans);
+}
+
+/* Model identifiers remain monospaced; measurements use Space Grotesk below. */
+#modelName{font-family:'JetBrains Mono','Cascadia Mono',Consolas,monospace!important;font-variant-ligatures:none}
+
+/* Use the distinctive, square Space Grotesk figures only for measurements.
+   Chinese labels retain each skin's normal body font. */
+:is(
+  #clock,#footerClock,#powerSummary,#totalPower,
+  #cpuPct,#cpuLoadBig,#cpuClock,#cpuTemp,#cpuCores,#cpuThreads,
+  #ramPct,#ramTitle,#ramUsed,#ramAvailable,
+  #dailyRequests,#dailyInput,#dailyOutput,#dailyTotal,#gpuCount,
+  #modelContext,#genSpeed,#promptSpeed,#genWindow,#promptWindow,
+  #genAverage,#genPeak,#promptAverage,#promptPeak,
+  #contextUsed,#contextTotal,#contextFoot,#taskProgress,#taskId,
+  #inputTokens,#outputTokens,#totalTokens,
+  #gpuGrid strong,
+  .gpu-stats strong,.gpu-stats small,
+  .welcome-side strong,.welcome-side b,
+  .mast-readout strong,.mast-readout b,
+  .big-stat strong,.memory-line strong,
+  .daily-card strong,.metric>strong,.metric-panel>strong,
+  .token-card strong,.token-stat strong,
+  .card-top b,.panel-head b,.resource-head b,
+  .details b,.spec-row b,.host-specs b,.model-details b,.model-specs b,
+  .average-metric,.task-progress-row b,.task-state b,
+  .event-item,.event-item time,.process-main,.process-stats,.process-foot
+){font-family:var(--numeric-display)!important;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1,'zero' 1;font-variant-ligatures:none}

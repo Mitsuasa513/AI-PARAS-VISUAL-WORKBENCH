@@ -153,8 +153,9 @@ function applyRealStatus(data) {
     state.powerCurrent = null;
     $('totalPower').textContent = '—'; $('powerUnit').textContent = ''; $('powerPeak').textContent = '—'; $('powerSummary').textContent = '等待 nvidia-smi';
   }
-  const backendLabel = inference.connected ? `${inference.backend}${loaded ? ' 已加载模型' : ' 未加载模型'}` : '未检测到 llama.cpp / LM Studio / Strata';
-  $('dataSource').textContent = `${state.nvidiaAvailable ? 'GPU：' + state.gpuSource : 'GPU：未检测到 GPU 驱动'} · 主机：Task Manager 性能计数器 · ${backendLabel}`;
+  const backendLabel = inference.connected ? `${inference.backend}${loaded ? ' 已加载模型' : ' 未加载模型'}` : '未检测到 llama.cpp / LM Studio / Strata / Maya';
+  const hostSource = data.host?.source === 'procfs' ? 'Linux /proc' : 'Task Manager 性能计数器';
+  $('dataSource').textContent = `${state.nvidiaAvailable ? 'GPU：' + state.gpuSource : 'GPU：未检测到 GPU 驱动'} · 主机：${hostSource} · ${backendLabel}`;
   renderGpus(); renderSystem();
   return true;
 }
@@ -218,7 +219,7 @@ function renderSystem() {
   $('diskWrite').textContent = `写 ${formatRate(disk.writeBytesPerSec)}`;
   const process = host.process;
   $('processName').textContent = process?.name || '未找到推理进程';
-  $('processExe').textContent = process?.name ? `${process.name}.exe` : '—';
+  $('processExe').textContent = process ? (process.exe || `${process.name}.exe`) : '—';
   $('processPid').textContent = `PID ${process?.pid || '—'}`;
   $('processCpu').textContent = Number.isFinite(process?.cpuPercent) ? `${process.cpuPercent.toFixed(1)}%` : '—';
   $('processMemory').textContent = Number.isFinite(process?.memoryBytes) && process.memoryBytes ? `${(process.memoryBytes / 1073741824).toFixed(1)} GB` : '—';
@@ -317,7 +318,7 @@ async function refreshNow() {
 
 function init() {
   renderGpus(); renderSystem(); setModelUnavailable();
-  addEvent('任务', '等待 llama.cpp / LM Studio / Strata 加载模型');
+  addEvent('任务', '等待 llama.cpp / LM Studio / Strata / Maya 加载模型');
   addEvent('功耗', '等待 nvidia-smi 全卡功耗采样');
   $('liveToggle').addEventListener('change', (event) => { state.live = event.target.checked; $('pauseBtn').querySelector('em').textContent = state.live ? '暂停采样' : '继续采样'; });
   $('pauseBtn').addEventListener('click', () => { state.live = !state.live; $('liveToggle').checked = state.live; $('pauseBtn').querySelector('em').textContent = state.live ? '暂停采样' : '继续采样'; });
