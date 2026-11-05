@@ -6,6 +6,16 @@ token totals.
 
 零依赖的本地监控面板，基于浏览器运行，实时显示 GPU 状态、token 生成速度（llama.cpp / LM Studio）、功耗、CPU、内存以及每日 token 总量。
 
+## 20261105更新
+- NEW！更新全新的皮肤界面，现在可以自由缩放而不需要滚动，一页就能显示所有信息！（见下图）🐳
+- 新增了MAYA的后端接入；
+- 没有啥BUG需要修复（欢迎提交）。
+
+20261105 Update
+- NEW! Updated all skin interfaces: they now scale freely without scrolling, displaying all information on a single page!(SEE EXAMPLE BELOW) 🐳
+- Added MAYA backend integration.
+- No bugs needed fixing (bug reports are welcome).
+
 ## 20261009更新
 - 推理面板加了「峰值」：生成速度和预填充速度除了平均，还会显示本次任务跑到的最高值（和平均同一个统计窗口，换模型或开新任务时一起清零），方便看性能上限；
 - 修了个隐蔽的 BUG：切到英文再切回简体中文，界面文字现在能完整还原（之前会残留英文）；
@@ -67,11 +77,11 @@ Open <http://127.0.0.1:4173> after startup. 启动浏览器输入地址即可启
 
 | Skin            | EFFECT                   |
 |-----------------|-----------------------|
-| Native Console  | ![AI Workbench 截图](EXAMPLES/EXAMPLE1-ORIGIN.png) |
-| Neon Matrix     | ![AI Workbench 截图](EXAMPLES/EXAMPLE2-CYBERPUNK.png)  |
-| Minimal Native  | ![AI Workbench 截图](EXAMPLES/EXAMPLE3-PUREWHITE.png) |
-| Cloud Scroll    | ![AI Workbench 截图](EXAMPLES/EXAMPLE4-ZENSCROLL.png)  |
-| Emerald Garden  | ![AI Workbench 截图](EXAMPLES/EXAMPLE5-OZ.png)  |
+| Native Console  | ![NEXUS v2.0.1 Native Console](screenshots/v2.0.1/01-native-console.png) |
+| Neon Matrix     | ![NEXUS v2.0.1 Neon Matrix](screenshots/v2.0.1/02-neon-matrix.png) |
+| Minimal Native  | ![NEXUS v2.0.1 Minimal Native](screenshots/v2.0.1/03-minimal-native.png) |
+| Cloud Scroll    | ![NEXUS v2.0.1 Cloud Scroll](screenshots/v2.0.1/04-cloud-scroll.png) |
+| Emerald Garden  | ![NEXUS v2.0.1 Emerald Garden](screenshots/v2.0.1/05-emerald-garden.png) |
 
 ## Environment Variables / 环境变量
 
