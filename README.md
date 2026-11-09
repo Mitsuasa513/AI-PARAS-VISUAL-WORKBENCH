@@ -6,12 +6,22 @@ token totals.
 
 零依赖的本地监控面板，基于浏览器运行，实时显示 GPU 状态、token 生成速度（llama.cpp / LM Studio）、功耗、CPU、内存以及每日 token 总量。
 
+## 20261109更新
+- 增加安全措施，防止未经授权的API-KEY获取；
+- 新增了vLLM的后端接入；
+- 没有啥BUG需要修复（欢迎提交）。
+
+## 20261109 Update
+- Added security measures to prevent unauthorized access to API keys.
+- Added vLLM backend integration.
+- No bugs need fixing (bug reports are welcome).
+
 ## 20261105更新
 - NEW！更新全新的皮肤界面，现在可以自由缩放而不需要滚动，一页就能显示所有信息！（见下图）🐳
 - 新增了MAYA的后端接入；
 - 没有啥BUG需要修复（欢迎提交）。
 
-20261105 Update
+## 20261105 Update
 - NEW! Updated all skin interfaces: they now scale freely without scrolling, displaying all information on a single page!(SEE EXAMPLE BELOW) 🐳
 - Added MAYA backend integration.
 - No bugs needed fixing (bug reports are welcome).
