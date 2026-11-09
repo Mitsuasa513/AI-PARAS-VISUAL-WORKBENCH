@@ -8,6 +8,8 @@ const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || '127.0.0.1';
 const STRATA_API_KEY = process.env.STRATA_API_KEY || '';
 const strataHeaders = STRATA_API_KEY ? { Authorization: `Bearer ${STRATA_API_KEY}` } : {};
+const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
+const vllmHeaders = VLLM_API_KEY ? { Authorization: `Bearer ${VLLM_API_KEY}` } : {};
 const ROOT = __dirname;
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -15,7 +17,76 @@ const MIME = {
   '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff',
   '.ttf': 'font/ttf', '.otf': 'font/otf',
 };
+const DEFAULT_BACKEND_SETTINGS = Object.freeze({
+  vllmUrl: process.env.VLLM_URL || 'http://127.0.0.1:8080',
+  strataUrl: process.env.STRATA_URL || 'http://127.0.0.1:8081',
+  mayaUrl: process.env.MAYA_URL || 'http://127.0.0.1:8082',
+  llamaUrl: process.env.LLAMA_URL || 'http://127.0.0.1:8089',
+  lmStudioUrl: process.env.LMSTUDIO_URL || 'http://127.0.0.1:1234',
+});
+const BACKEND_SETTING_KEYS = Object.keys(DEFAULT_BACKEND_SETTINGS);
+const backendSettingsPath = process.env.WORKBENCH_SETTINGS_PATH || path.join(ROOT, '.workbench-settings.json');
+
+function normalizeBackendUrl(value, fallback) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return fallback;
+  let url;
+  try {
+    url = new URL(text);
+  } catch (_) {
+    throw new Error('后端地址格式不正确');
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('只支持 http/https 地址');
+  if (url.username || url.password) throw new Error('后端地址不能包含用户名或密码');
+  return url.href.replace(/\/+$/, '');
+}
+
+function normalizeBackendSettings(input = {}) {
+  return Object.fromEntries(
+    BACKEND_SETTING_KEYS.map((key) => [
+      key,
+      normalizeBackendUrl(input[key], DEFAULT_BACKEND_SETTINGS[key]),
+    ]),
+  );
+}
+
+function loadBackendSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(backendSettingsPath, 'utf8'));
+    return normalizeBackendSettings(saved);
+  } catch (_) {
+    return { ...DEFAULT_BACKEND_SETTINGS };
+  }
+}
+
+let backendSettings = loadBackendSettings();
+
+function saveBackendSettings(input) {
+  const normalized = normalizeBackendSettings(input);
+  const tmp = `${backendSettingsPath}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+  fs.renameSync(tmp, backendSettingsPath);
+  backendSettings = normalized;
+  return normalized;
+}
+
+function backendSettingsPayload() {
+  return {
+    values: { ...backendSettings },
+    defaults: { ...DEFAULT_BACKEND_SETTINGS },
+  };
+}
+
+const BACKEND_TEST_TARGETS = Object.freeze({
+  vllmUrl: { name: 'vLLM', path: '/v1/models', headers: () => vllmHeaders },
+  strataUrl: { name: 'Strata', path: '/v1/status', headers: () => strataHeaders },
+  mayaUrl: { name: 'Maya', path: '/v1/status', headers: () => strataHeaders },
+  llamaUrl: { name: 'llama.cpp', path: '/v1/models', headers: () => ({}) },
+  lmStudioUrl: { name: 'LM Studio', path: '/api/v1/models', headers: () => ({}) },
+});
 const previousMetrics = new Map();
+const previousVllmMetrics = new Map();
+const lastVllmSpeeds = new Map();
 const previousLlamaSlots = new Map();
 let lastLlamaProbeAt = null;
 // llama.cpp 的 /slots 在请求完成后会把 is_processing 置为 false，
@@ -633,15 +704,25 @@ async function readHost() {
 }
 
 async function probeInference(preferred = 'auto') {
-  const llamaUrl = process.env.LLAMA_URL || 'http://127.0.0.1:8080';
+  const settings = backendSettings;
+  const llamaUrl = settings.llamaUrl;
+  const vllmUrl = settings.vllmUrl;
   const targets = [
     { name: 'llama.cpp', url: llamaUrl, type: 'llama', key: 'llama' },
-    { name: 'LM Studio', url: process.env.LMSTUDIO_URL || 'http://127.0.0.1:1234', type: 'lmstudio', key: 'lmstudio' },
+    { name: 'LM Studio', url: settings.lmStudioUrl, type: 'lmstudio', key: 'lmstudio' },
   ];
   // Strata 默认也监听 8080（和 llama.cpp 相同），所以只有显式给了 STRATA_URL 才单独探测它；
   // 否则 8080 上的后端由自检接口 /v1/status 的 service 字段区分（见 probeTarget）。
-  const strataUrl = process.env.STRATA_URL;
+  const strataUrl = settings.strataUrl;
   if (strataUrl && strataUrl !== llamaUrl) targets.unshift({ name: 'Strata', url: strataUrl, type: 'strata', key: 'strata' });
+  const mayaUrl = settings.mayaUrl;
+  if (mayaUrl && !targets.some((target) => target.url === mayaUrl)) {
+    targets.unshift({ name: 'Maya', url: mayaUrl, type: 'maya', key: 'maya' });
+  }
+  // vLLM 使用标准 OpenAI /v1/models 与 Prometheus /metrics，不限定 1Cat 分支。
+  if (vllmUrl && !targets.some((target) => target.url === vllmUrl)) {
+    targets.unshift({ name: 'vLLM', url: vllmUrl, type: 'vllm', key: 'vllm' });
+  }
   const wanted = preferred === 'strata' && !targets.some((target) => target.key === 'strata') ? 'llama' : preferred;
   const ordered = wanted && wanted !== 'auto' ? [...targets.filter((target) => target.key === wanted), ...targets.filter((target) => target.key !== wanted)] : targets;
   const results = (await Promise.all(ordered.map((target) => probeTarget(target)))).filter(Boolean);
@@ -652,6 +733,8 @@ async function probeInference(preferred = 'auto') {
 
 async function probeTarget(target) {
   try {
+    if (target.type === 'vllm') return await probeVllm(target);
+    if (target.type === 'maya') return await probeMaya(target);
     if (target.type === 'lmstudio') {
       const now = Date.now();
       if (lmStudioProbeCache && now - lmStudioProbeCache.at < 1000) return { ...lmStudioProbeCache.value, key: target.key, backends: undefined };
@@ -931,6 +1014,102 @@ async function probeStrata(target, known = null, modelId = null) {
   };
 }
 
+// 通用 vLLM：/v1/models 提供模型与 max_model_len，/metrics 提供请求、
+// token、KV 占用和延迟直方图。兼容标准 vLLM 及 1Cat 等衍生分支。
+async function probeVllm(target) {
+  try {
+    const response = await fetch(`${target.url}/v1/models`, {
+      headers: vllmHeaders,
+      signal: AbortSignal.timeout(900),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const models = Array.isArray(data.data) ? data.data.filter((item) => item && item.id) : [];
+    const model = models[0] || null;
+    let metricsText = '';
+    try {
+      const metricsResponse = await fetch(`${target.url}/metrics`, {
+        headers: vllmHeaders,
+        signal: AbortSignal.timeout(900),
+      });
+      if (metricsResponse.ok) metricsText = await metricsResponse.text();
+    } catch (_) {}
+
+    const stats = parseVllmMetrics(metricsText, target.url);
+    if (stats.counters) {
+      syncDailyCounters(
+        'vllm',
+        stats.counters.promptTokens,
+        stats.counters.generatedTokens,
+        stats.counters.requests,
+      );
+    }
+    noteBackendActivity('vllm', stats.active);
+
+    const contextLength = Number(model?.max_model_len) || null;
+    const kvUsage = stats.kvUsage == null ? null : Math.max(0, Math.min(1, stats.kvUsage));
+    const used = contextLength && kvUsage != null ? Math.round(contextLength * kvUsage) : null;
+    const queued = Number.isFinite(stats.waiting) ? stats.waiting : 0;
+    const running = Number.isFinite(stats.running) ? stats.running : 0;
+    const phase = running > 0
+      ? (stats.generationDelta > 0 ? 'generating' : stats.promptDelta > 0 ? 'prefilling' : 'generating')
+      : queued > 0 ? 'queued' : 'waiting';
+    const activity = phase === 'generating'
+      ? { state: 'generating', label: '生成中', detail: `${running} 个请求正在输出 token` }
+      : phase === 'prefilling'
+        ? { state: 'prefilling', label: '读取提示词', detail: `${running} 个请求正在预填充` }
+        : phase === 'queued'
+          ? { state: 'queued', label: '排队中', detail: `${queued} 个请求等待推理槽位` }
+          : { state: 'waiting', label: '等待请求', detail: '推理服务空闲' };
+    const label = `${model?.id || ''} ${model?.root || ''}`;
+    const quantization = label.match(/\b(?:IQ\d(?:_[A-Z0-9]+)?|Q\d(?:_[A-Z0-9]+)?|FP\d+|NVFP4|MXFP4|AWQ|GPTQ|INT\d+)\b/i)?.[0] || null;
+    const format = /\.gguf(?:\b|$)/i.test(label) ? 'GGUF' : null;
+
+    return {
+      connected: true,
+      loaded: Boolean(model),
+      backend: target.name,
+      url: target.url,
+      model: model?.id || null,
+      key: target.key,
+      metrics: {
+        promptSpeed: stats.promptSpeed,
+        generationSpeed: stats.generationSpeed,
+        promptTokens: stats.latestPromptTokens,
+        predictedTokens: stats.latestGeneratedTokens,
+      },
+      slots: {
+        active: stats.active,
+        used,
+        total: contextLength,
+        promptTokens: stats.latestPromptTokens,
+        predictedTokens: stats.latestGeneratedTokens,
+        task: stats.active ? `vLLM · ${running} 运行 / ${queued} 排队` : null,
+        parallel: running || null,
+        queued,
+        activeRequests: running,
+        kvUsage,
+        activity,
+      },
+      details: {
+        displayName: model?.id || null,
+        architecture: null,
+        quantization,
+        parameters: null,
+        format,
+        backend: 'vLLM',
+        backendVersion: 'vLLM',
+        contextLength,
+        parallel: null,
+        kvType: null,
+      },
+      daily: dailyTokensPayload('vLLM /metrics 增量'),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 async function probeLmStudio(target) {
   try {
     const response = await fetch(`${target.url}/api/v1/models`, { signal: AbortSignal.timeout(900) });
@@ -1082,6 +1261,92 @@ function metricValue(text, names) {
   return null;
 }
 
+function prometheusValues(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escaped}(?:\\{[^\\n]*\\})?\\s+([0-9.eE+-]+)\\s*$`, 'gm');
+  const values = [];
+  for (const match of text.matchAll(pattern)) {
+    const value = Number(match[1]);
+    if (Number.isFinite(value)) values.push(value);
+  }
+  return values;
+}
+
+function metricSum(text, names) {
+  for (const name of names) {
+    const values = prometheusValues(text, name);
+    if (values.length) return values.reduce((sum, value) => sum + value, 0);
+  }
+  return null;
+}
+
+function metricMax(text, names) {
+  for (const name of names) {
+    const values = prometheusValues(text, name);
+    if (values.length) return Math.max(...values);
+  }
+  return null;
+}
+
+function parseVllmMetrics(text, key) {
+  const at = Date.now();
+  const promptTokens = metricSum(text, ['vllm:prompt_tokens_total', 'vllm:prompt_tokens']);
+  const generatedTokens = metricSum(text, ['vllm:generation_tokens_total', 'vllm:generation_tokens']);
+  const requests = metricSum(text, ['vllm:request_success_total', 'vllm:request_success']);
+  const running = metricMax(text, ['vllm:num_requests_running']);
+  const waiting = metricMax(text, ['vllm:num_requests_waiting']);
+  const kvUsage = metricMax(text, ['vllm:kv_cache_usage_perc']);
+  const promptRequestSum = metricSum(text, ['vllm:request_prompt_tokens_sum']);
+  const promptRequestCount = metricSum(text, ['vllm:request_prompt_tokens_count']);
+  const generatedRequestSum = metricSum(text, ['vllm:request_generation_tokens_sum']);
+  const generatedRequestCount = metricSum(text, ['vllm:request_generation_tokens_count']);
+  const ttftSum = metricSum(text, ['vllm:time_to_first_token_seconds_sum']);
+  const ttftCount = metricSum(text, ['vllm:time_to_first_token_seconds_count']);
+  const outputTokenSecondsSum = metricSum(text, ['vllm:request_time_per_output_token_seconds_sum']);
+  const outputTokenSecondsCount = metricSum(text, ['vllm:request_time_per_output_token_seconds_count']);
+  const previous = previousVllmMetrics.get(key);
+  previousVllmMetrics.set(key, { at, promptTokens, generatedTokens });
+  const elapsed = previous && at > previous.at ? (at - previous.at) / 1000 : 0;
+  const promptDelta = promptTokens != null && previous?.promptTokens != null ? promptTokens - previous.promptTokens : 0;
+  const generationDelta = generatedTokens != null && previous?.generatedTokens != null ? generatedTokens - previous.generatedTokens : 0;
+  const livePromptSpeed = elapsed > 0 && promptDelta >= 0 ? promptDelta / elapsed : null;
+  const liveGenerationSpeed = elapsed > 0 && generationDelta >= 0 ? generationDelta / elapsed : null;
+  const averagePromptTokens = promptRequestSum != null && promptRequestCount > 0 ? promptRequestSum / promptRequestCount : null;
+  const averageGeneratedTokens = generatedRequestSum != null && generatedRequestCount > 0 ? generatedRequestSum / generatedRequestCount : null;
+  const histogramPromptSpeed = averagePromptTokens != null && ttftSum != null && ttftCount > 0 && ttftSum > 0
+    ? averagePromptTokens / (ttftSum / ttftCount)
+    : null;
+  const histogramGenerationSpeed = outputTokenSecondsSum != null && outputTokenSecondsCount > 0 && outputTokenSecondsSum > 0
+    ? outputTokenSecondsCount / outputTokenSecondsSum
+    : null;
+  const active = Number(running) > 0 || Number(waiting) > 0;
+  const previousSpeeds = lastVllmSpeeds.get(key) || { promptSpeed: null, generationSpeed: null };
+  const promptSpeed = active
+    ? (Number.isFinite(livePromptSpeed) && livePromptSpeed > 0 ? livePromptSpeed : histogramPromptSpeed ?? previousSpeeds.promptSpeed)
+    : previousSpeeds.promptSpeed ?? histogramPromptSpeed;
+  const generationSpeed = active
+    ? (Number.isFinite(liveGenerationSpeed) && liveGenerationSpeed > 0 ? liveGenerationSpeed : histogramGenerationSpeed ?? previousSpeeds.generationSpeed)
+    : previousSpeeds.generationSpeed ?? histogramGenerationSpeed;
+  if (Number.isFinite(promptSpeed) || Number.isFinite(generationSpeed)) {
+    lastVllmSpeeds.set(key, { promptSpeed, generationSpeed });
+  }
+  return {
+    promptSpeed,
+    generationSpeed,
+    latestPromptTokens: averagePromptTokens,
+    latestGeneratedTokens: averageGeneratedTokens,
+    promptDelta,
+    generationDelta,
+    running,
+    waiting,
+    kvUsage,
+    active,
+    counters: promptTokens != null || generatedTokens != null || requests != null
+      ? { promptTokens, generatedTokens, requests }
+      : null,
+  };
+}
+
 function parseMetrics(text, backend) {
   const snapshot = {
     promptTokens: metricValue(text, ['llamacpp:prompt_tokens_total', 'prompt_tokens_total']),
@@ -1120,11 +1385,159 @@ async function status(preferredBackend = 'auto') {
   };
 }
 
+function readJsonBody(req, limit = 16 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    let settled = false;
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      if (settled) return;
+      body += chunk;
+      if (body.length > limit) {
+        settled = true;
+        reject(new Error('请求内容过大'));
+      }
+    });
+    req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      try {
+        const parsed = body.trim() ? JSON.parse(body) : {};
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('请求内容必须是 JSON 对象');
+        resolve(parsed);
+      } catch (error) {
+        reject(error instanceof SyntaxError ? new Error('请求内容不是有效的 JSON') : error);
+      }
+    });
+    req.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+  });
+}
+
+function settingsPostAllowed(req) {
+  const contentType = req.headers['content-type'] || '';
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return { code: 415, error: '请求必须使用 application/json' };
+  }
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      if (new URL(origin).host !== req.headers.host) return { code: 403, error: '不允许跨站修改设置' };
+    } catch (_) {
+      return { code: 403, error: '来源地址无效' };
+    }
+  }
+  return null;
+}
+
+function backendSummary(target, payload) {
+  const model = payload?.data?.[0]?.id
+    || payload?.model?.id
+    || payload?.model?.name
+    || payload?.model_name
+    || (typeof payload?.model === 'string' ? payload.model : null);
+  const service = payload?.service || payload?.backend;
+  return [service, model].filter(Boolean).join(' · ');
+}
+
+async function testBackendEndpoint(key, baseUrl) {
+  const target = BACKEND_TEST_TARGETS[key];
+  const endpoint = `${baseUrl}${target.path}`;
+  try {
+    const response = await fetch(endpoint, {
+      headers: target.headers(),
+      signal: AbortSignal.timeout(2500),
+    });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {}
+    const summary = backendSummary(target, payload);
+    return {
+      key,
+      name: target.name,
+      url: baseUrl,
+      endpoint,
+      ok: response.ok,
+      status: response.status,
+      detail: response.ok ? (summary ? `连接成功 · ${summary}` : '连接成功') : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    return {
+      key,
+      name: target.name,
+      url: baseUrl,
+      endpoint,
+      ok: false,
+      status: null,
+      detail: timedOut ? '连接超时' : '无法连接',
+    };
+  }
+}
+
+async function testBackendSettings(settings) {
+  const results = await Promise.all(
+    BACKEND_SETTING_KEYS.map((key) => testBackendEndpoint(key, settings[key])),
+  );
+  return { results };
+}
+
 function send(res, code, type, body) { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(body); }
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname === '/api/status') {
     try { send(res, 200, MIME['.json'], JSON.stringify(await status(url.searchParams.get('backend') || 'auto'))); } catch (error) { send(res, 500, MIME['.json'], JSON.stringify({ error: error.message })); }
+    return;
+  }
+  if (url.pathname === '/api/settings') {
+    if (!['GET', 'POST'].includes(req.method)) {
+      res.setHeader('Allow', 'GET, POST');
+      send(res, 405, MIME['.json'], JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+    if (req.method === 'GET') {
+      send(res, 200, MIME['.json'], JSON.stringify(backendSettingsPayload()));
+      return;
+    }
+    const rejected = settingsPostAllowed(req);
+    if (rejected) {
+      send(res, rejected.code, MIME['.json'], JSON.stringify({ error: rejected.error }));
+      return;
+    }
+    try {
+      const body = await readJsonBody(req);
+      const saved = saveBackendSettings({ ...backendSettings, ...body });
+      send(res, 200, MIME['.json'], JSON.stringify({
+        values: saved,
+        defaults: { ...DEFAULT_BACKEND_SETTINGS },
+      }));
+    } catch (error) {
+      send(res, 400, MIME['.json'], JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  if (url.pathname === '/api/settings/test') {
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      send(res, 405, MIME['.json'], JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+    const rejected = settingsPostAllowed(req);
+    if (rejected) {
+      send(res, rejected.code, MIME['.json'], JSON.stringify({ error: rejected.error }));
+      return;
+    }
+    try {
+      const body = await readJsonBody(req);
+      const settings = normalizeBackendSettings({ ...backendSettings, ...body });
+      send(res, 200, MIME['.json'], JSON.stringify(await testBackendSettings(settings)));
+    } catch (error) {
+      send(res, 400, MIME['.json'], JSON.stringify({ error: error.message }));
+    }
     return;
   }
   const requested = url.pathname === '/' ? '/index.html' : url.pathname;

@@ -1,6 +1,8 @@
 # runtime state written by server.js
 .daily-tokens.json
 .llama-metrics-cache.json
+.workbench-settings.json
+.workbench-settings.json.tmp
 
 # dependencies / OS noise
 node_modules/

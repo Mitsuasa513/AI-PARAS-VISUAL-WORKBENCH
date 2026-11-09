@@ -3,7 +3,8 @@ name: local-ai-workbench
 description: >
   Launch and operate the Local AI Workbench - a zero-dependency, browser-based
   monitoring dashboard for local GPU utilisation, token generation speed
-  (llama.cpp / LM Studio), power draw, CPU, memory and daily token totals.
+  (vLLM / llama.cpp / LM Studio), power draw, CPU, memory and daily token
+  totals.
   Use when the user asks to start, open, or configure the AI workbench,
   GPU monitor, or local inference dashboard. Handles Node.js detection and
   installation automatically.
@@ -17,7 +18,7 @@ A self-contained Node.js local monitoring dashboard. It displays:
 
 - GPU name, utilisation, memory, temperature, power draw, fan speed, P-state
   (via `nvidia-smi`; falls back to demo data if unavailable)
-- Token generation and prompt speed (llama.cpp `:8080` or LM Studio `:1234`)
+- Token generation and prompt speed (vLLM `:8080`, llama.cpp `:8089` or LM Studio `:1234`)
 - Per-task average **and peak** tok/s for both generation and prompt speed. The
   two share one window (they reset together when the model changes or a new
   task starts), so the peak can be read directly against the average.
@@ -37,8 +38,10 @@ The server binds to `127.0.0.1` only and never sends data off-machine.
 - Optional: NVIDIA driver (`nvidia-smi`), llama.cpp server, or LM Studio server
   for real inference metrics; without these the dashboard shows demo/placeholder
   values and marks the data source accordingly.
-- Optional: Strata (`strata serve`, default `:8080`) is detected automatically
+- Optional: Strata (`strata serve`, default `:8081`) is detected automatically
   on the llama.cpp port and shown as its own backend.
+- Optional: vLLM and compatible forks are detected through `/v1/models` and
+  Prometheus `/metrics`. The default URL is `http://127.0.0.1:8080`.
 
 ## Quick Start
 
@@ -68,9 +71,11 @@ Then open <http://127.0.0.1:4173> in a browser.
 | Variable      | Default                    | Description                                    |
 |---------------|----------------------------|------------------------------------------------|
 | `PORT`        | `4173`                     | HTTP port for the dashboard                    |
-| `LLAMA_URL`   | `http://127.0.0.1:8080`   | llama.cpp server URL (also used to spot Strata) |
+| `VLLM_URL`    | `http://127.0.0.1:8080`   | vLLM/OpenAI-compatible server URL              |
+| `VLLM_API_KEY`| empty                      | Bearer token for protected vLLM endpoints      |
+| `LLAMA_URL`   | `http://127.0.0.1:8089`   | llama.cpp server URL (also used to spot Strata) |
 | `LMSTUDIO_URL`| `http://127.0.0.1:1234`   | LM Studio server URL                           |
-| `STRATA_URL`  | `http://127.0.0.1:8080`   | Strata server URL, only needed on its own port |
+| `STRATA_URL`  | `http://127.0.0.1:8081`   | Strata server URL, only needed on its own port |
 
 ## Data Source Priority
 
@@ -78,8 +83,9 @@ Then open <http://127.0.0.1:4173> in a browser.
 2. LM Studio `server-logs/YYYY-MM/*.log` for token stats (preferred)
 3. LM Studio `conversations/*.conversation.json` (fallback)
 4. Strata `/v1/status` + `/metrics` (model, live speed, hardware, totals)
-5. llama.cpp `/metrics` or `/slots` token deltas
-6. Demo data (clearly labelled) when no real source is reachable
+5. vLLM `/v1/models` + `/metrics` (model, context, throughput, KV usage, totals)
+6. llama.cpp `/metrics` or `/slots` token deltas
+7. Demo data (clearly labelled) when no real source is reachable
 
 ## Notes
 
@@ -90,7 +96,7 @@ Then open <http://127.0.0.1:4173> in a browser.
   `/scroll.html`, or `/oz.html`, or use the skin selector in the top bar of
   any page.
 - Daily totals: LM Studio is read from its own server logs; llama.cpp and
-  Strata have no per-day log, so the server differences their cumulative
+  Strata and vLLM have no per-day log, so the server differences their cumulative
   counters into `.daily-tokens.json` (local date, resets at midnight). For
   llama.cpp the `/metrics` counters are exact but need `--metrics`; the
   `/slots` fallback can miss a request that starts and ends between two polls.
